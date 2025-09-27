@@ -1,4 +1,4 @@
-use crate::{auth::AuthLayer, mines::router, server::AppState, store::Store};
+use crate::{auth::AuthLayer, mines::router, server::AppState, store::Store, wallet::router as wallet_router};
 use axum::{Router, routing::get};
 use moka::future::Cache;
 use std::sync::Arc;
@@ -8,6 +8,7 @@ mod mines;
 mod primitives;
 mod server;
 mod store;
+mod wallet;
 
 const JWT_SECRET: &str = "JWT_SECRET";
 
@@ -16,12 +17,18 @@ async fn main() {
     let _ = tracing_subscriber::fmt().try_init();
     let sessions = Arc::new(Cache::builder().build());
     let pg_default = "postgresql://postgres:postgres@localhost:5432/postgres";
+    println!("Attempting to connect to database: {}", pg_default);
+    
     let pool = sqlx::postgres::PgPoolOptions::new()
-        .max_connections(2000)
+        .max_connections(200)
         .connect(pg_default)
         .await
-        .unwrap();
-    let store = Arc::new(Store::new(pool).await.expect("unable to create store"));
+        .expect("Failed to connect to database. Please ensure PostgreSQL is running on localhost:5432");
+    
+    println!("Successfully connected to database!");
+    println!("Running database migrations...");
+    let store = Arc::new(Store::new(pool).await.expect("Failed to create store or run migrations"));
+    println!("Database migrations completed successfully!");
     let app_state = AppState::new(sessions, store, JWT_SECRET.to_string());
 
     use tower_http::cors::{Any, CorsLayer};
@@ -32,11 +39,13 @@ async fn main() {
         .allow_headers(Any);
 
     let apex_router = apex::router(Arc::new(app_state.clone()));
-    let mines_router = router(Arc::new(app_state)).await;
+    let mines_router = router(Arc::new(app_state.clone())).await;
+    let wallet_router = wallet_router(Arc::new(app_state.clone())).await;
     let app_router = Router::new()
         .route("/", get(|| async { "Choose Rich API is running!" }))
         .merge(apex_router)
         .merge(mines_router)
+        .merge(wallet_router)
         .layer(AuthLayer {
             expected_secret: "X-Server-secret".to_string(),
             jwt_secret: JWT_SECRET.to_string(),

@@ -30,10 +30,10 @@ impl AppState {
         }
     }
     pub async fn default() -> Self {
-        let pg_defautl = "postgresql://postgres:postgres@localhost:5432/postgres";
+        let pg_default = "postgresql://postgres:postgres@localhost:5432/postgres";
         let pool = sqlx::postgres::PgPoolOptions::new()
-            .max_connections(2000)
-            .connect(pg_defautl)
+            .max_connections(200)
+            .connect(pg_default)
             .await
             .unwrap();
         Self {
