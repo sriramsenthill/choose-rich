@@ -16,6 +16,13 @@ use alloy::{
     providers::{Provider, ProviderBuilder},
     primitives::{Address, U256},
 };
+use crate::mines::{
+    CashoutRequest as MinesCashoutRequest, CashoutResponse as MinesCashoutResponse, 
+    MoveRequest, MoveResponse, StartGameRequest, StartGameResponse, GameSession, SessionStatus
+};
+use crate::primitives::new_moka_cache;
+use crate::server::Service;
+use serde_json::to_value;
 
 #[derive(Serialize)]
 struct GameAddressResponse {
@@ -44,12 +51,12 @@ struct DepositResponse {
 }
 
 #[derive(Deserialize)]
-struct CashoutRequest {
+struct WalletCashoutRequest {
     amount: String, // Amount to cashout
 }
 
 #[derive(Serialize)]
-struct CashoutResponse {
+struct WalletCashoutResponse {
     success: bool,
     amount_cashed_out: String,
     remaining_balance: String,
@@ -186,8 +193,8 @@ async fn simulate_deposit(
 async fn cashout_funds(
     State(state): State<Arc<AppState>>,
     Path(address): Path<String>,
-    Json(payload): Json<CashoutRequest>,
-) -> ApiResult<CashoutResponse> {
+    Json(payload): Json<WalletCashoutRequest>,
+) -> ApiResult<WalletCashoutResponse> {
     use sqlx::types::BigDecimal;
     use std::str::FromStr;
 
@@ -241,7 +248,7 @@ async fn cashout_funds(
             garden::api::internal_error(&format!("Failed to record transaction: {}", e))
         })?;
 
-    Ok(Response::ok(CashoutResponse {
+    Ok(Response::ok(WalletCashoutResponse {
         success: true,
         amount_cashed_out: cashout_amount.to_string(),
         remaining_balance: updated_user.in_game_balance.to_string(),
@@ -435,6 +442,168 @@ async fn check_arb_sepolia_deposits(
     }
 }
 
+// Mines game functions
+async fn start_mines_game(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<StartGameRequest>,
+) -> ApiResult<StartGameResponse> {
+    // Get user from database using game_address
+    let user = state.store.get_user_by_evm_addr(&payload.game_address).await
+        .map_err(|e| garden::api::internal_error(&format!("Database error: {}", e)))?
+        .ok_or_else(|| garden::api::bad_request("User not found for game address"))?;
+
+    // Check if user has enough in-game balance
+    let bet_amount = BigDecimal::from_str(&payload.amount.to_string())
+        .map_err(|_| garden::api::bad_request("Invalid amount format"))?;
+    if user.in_game_balance < bet_amount {
+        return Err(garden::api::bad_request("Insufficient in-game balance"));
+    }
+
+    // Deduct bet amount from user's in-game balance
+    let _updated_user = state.store.adjust_in_game_balance(&user.user_id, &(-bet_amount.clone())).await
+        .map_err(|e| garden::api::internal_error(&format!("Failed to deduct in-game balance: {}", e)))?;
+
+    let session = GameSession::new(payload.amount, payload.blocks, payload.mines, user.user_id.clone())
+        .map_err(|e| garden::api::bad_request(&e.to_string()))?;
+
+    // Record game start transaction
+    let transaction = crate::store::GameTransaction {
+        id: String::new(),
+        user_id: user.user_id.clone(),
+        transaction_type: "game_loss".to_string(), // Initially treat as loss, will change if they win
+        amount: bet_amount,
+        game_type: Some("mines".to_string()),
+        game_session_id: Some(session.id.clone()),
+        description: Some("Mines game bet".to_string()),
+        created_at: None,
+    };
+
+    let _recorded_transaction = state.store.create_transaction(&transaction).await
+        .map_err(|e| garden::api::internal_error(&format!("Failed to record transaction: {}", e)))?;
+
+    let response = StartGameResponse {
+        id: session.id.clone(),
+        amount: payload.amount,
+        blocks: payload.blocks,
+        mines: payload.mines,
+        session_status: SessionStatus::Active,
+    };
+
+    let service_state = match state.sessions.get(&Service::Mines).await {
+        Some(cache) => cache,
+        None => {
+            let cache = new_moka_cache(std::time::Duration::from_secs(30 * 60));
+            state.sessions.insert(Service::Mines, cache.clone()).await;
+            cache
+        }
+    };
+
+    service_state
+        .insert(
+            session.id.clone(),
+            to_value(&session).map_err(|_| garden::api::internal_error("Serialization error"))?,
+        )
+        .await;
+
+    Ok(Response::ok(response))
+}
+
+async fn make_mines_move(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<MoveRequest>,
+) -> ApiResult<MoveResponse> {
+    // Get user from database using game_address
+    let user = state.store.get_user_by_evm_addr(&payload.game_address).await
+        .map_err(|e| garden::api::internal_error(&format!("Database error: {}", e)))?
+        .ok_or_else(|| garden::api::bad_request("User not found for game address"))?;
+
+    let service_state = state
+        .sessions
+        .get(&Service::Mines)
+        .await
+        .ok_or(garden::api::bad_request("Session not found"))?;
+    let mut session: GameSession = service_state
+        .get(&payload.id)
+        .await
+        .and_then(|v| serde_json::from_value(v.clone()).ok())
+        .ok_or(garden::api::bad_request("Session not found"))?;
+
+    let response = session
+        .make_move(payload.block, user.user_id.clone())
+        .map_err(|e| garden::api::bad_request(&e.to_string()))?;
+    service_state
+        .insert(
+            session.id.clone(),
+            to_value(&session).map_err(|_| garden::api::internal_error("Serialization error"))?,
+        )
+        .await;
+
+    if response.session_status == SessionStatus::Ended {
+        // If the game ended (hit a mine), no additional balance changes needed
+        // as the bet was already deducted when the game started
+        service_state.remove(&payload.id).await;
+    }
+
+    Ok(Response::ok(response))
+}
+
+async fn cashout_mines_game(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<MinesCashoutRequest>,
+) -> ApiResult<MinesCashoutResponse> {
+    // Get user from database using game_address
+    let user = state.store.get_user_by_evm_addr(&payload.game_address).await
+        .map_err(|e| garden::api::internal_error(&format!("Database error: {}", e)))?
+        .ok_or_else(|| garden::api::bad_request("User not found for game address"))?;
+
+    let service_state = state
+        .sessions
+        .get(&Service::Mines)
+        .await
+        .ok_or(garden::api::bad_request("Session not found"))?;
+    let mut session: GameSession = service_state
+        .get(&payload.id)
+        .await
+        .and_then(|v| serde_json::from_value(v.clone()).ok())
+        .ok_or(garden::api::bad_request("Session not found"))?;
+
+    let response = session
+        .cashout(user.user_id.clone())
+        .map_err(|e| garden::api::bad_request(&e.to_string()))?;
+
+    // Add winnings to user's balance
+    let payout_amount = BigDecimal::from_str(&response.final_payout.to_string())
+        .map_err(|_| garden::api::internal_error("Invalid payout amount"))?;
+    if payout_amount > BigDecimal::from(0) {
+        let _updated_user = state.store.adjust_in_game_balance(&user.user_id, &payout_amount).await
+            .map_err(|e| garden::api::internal_error(&format!("Failed to add winnings: {}", e)))?;
+
+        // Record win transaction
+        let win_transaction = crate::store::GameTransaction {
+            id: String::new(),
+            user_id: user.user_id.clone(),
+            transaction_type: "game_win".to_string(),
+            amount: payout_amount,
+            game_type: Some("mines".to_string()),
+            game_session_id: Some(session.id.clone()),
+            description: Some(format!("Mines game cashout - won {} from bet of {}", response.final_payout, response.src)),
+            created_at: None,
+        };
+
+        let _win_recorded = state.store.create_transaction(&win_transaction).await
+            .map_err(|e| garden::api::internal_error(&format!("Failed to record win transaction: {}", e)))?;
+    }
+
+    service_state
+        .insert(
+            session.id.clone(),
+            to_value(&session).map_err(|_| garden::api::internal_error("Serialization error"))?,
+        )
+        .await;
+
+    Ok(Response::ok(response))
+}
+
 async fn health_check() -> &'static str {
     "Wallet API is running!"
 }
@@ -451,5 +620,8 @@ pub async fn router(state: Arc<AppState>) -> Router {
         .route("/monitor/status", get(get_monitor_status))
         .route("/monitor/check", post(trigger_deposit_check))
         .route("/refresh-balance", post(refresh_balance))
+        .route("/mines/start", post(start_mines_game))
+        .route("/mines/move", post(make_mines_move))
+        .route("/mines/cashout", post(cashout_mines_game))
         .with_state(state)
 }

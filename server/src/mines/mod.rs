@@ -1,6 +1,6 @@
 mod router;
 use rand::Rng;
-pub use router::*;
+pub use router::router;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, HashSet},
@@ -12,7 +12,8 @@ const SESSION_TTL: Duration = Duration::from_secs(30 * 60);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StartGameRequest {
-    pub amount: u32,
+    pub game_address: String,
+    pub amount: f64,
     pub blocks: u32,
     pub mines: u32,
 }
@@ -20,7 +21,7 @@ pub struct StartGameRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StartGameResponse {
     pub id: String,
-    pub amount: u32,
+    pub amount: f64,
     pub blocks: u32,
     pub mines: u32,
     pub session_status: SessionStatus,
@@ -28,6 +29,7 @@ pub struct StartGameResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MoveRequest {
+    pub game_address: String,
     pub id: String,
     pub block: u32,
 }
@@ -44,22 +46,23 @@ pub struct MoveResponse {
     pub id: String,
     pub actions: HashMap<String, MoveAction>,
     pub current_multiplier: Option<f64>,
-    pub potential_payout: Option<u32>,
-    pub final_payout: Option<u32>,
+    pub potential_payout: Option<f64>,
+    pub final_payout: Option<f64>,
     pub bomb_blocks: Option<Vec<u32>>,
     pub session_status: SessionStatus,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CashoutRequest {
+    pub game_address: String,
     pub id: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CashoutResponse {
     pub id: String,
-    pub src: u32,
-    pub final_payout: u32,
+    pub src: f64,
+    pub final_payout: f64,
     pub actions: HashMap<String, MoveAction>,
     pub bomb_blocks: Vec<u32>,
     pub session_status: SessionStatus,
@@ -69,7 +72,7 @@ pub struct CashoutResponse {
 pub struct GameSession {
     pub id: String,
     pub user_id: String,
-    pub src: u32,
+    pub src: f64,
     pub blocks: u32,
     pub mines: u32,
     pub mine_positions: HashSet<u32>,
@@ -86,7 +89,7 @@ pub enum SessionStatus {
 }
 
 impl GameSession {
-    pub fn new(src: u32, blocks: u32, mines: u32, user_id: String) -> eyre::Result<Self> {
+    pub fn new(src: f64, blocks: u32, mines: u32, user_id: String) -> eyre::Result<Self> {
         if blocks.isqrt() * blocks.isqrt() != blocks {
             return Err(eyre::eyre!("Invalid Blocks"));
         }
@@ -141,7 +144,7 @@ impl GameSession {
                 actions: self.actions.clone(),
                 current_multiplier: None,
                 potential_payout: None,
-                final_payout: Some(0),
+                final_payout: Some(0.0),
                 bomb_blocks: Some(self.mine_positions.iter().copied().collect()),
                 session_status: SessionStatus::Ended,
             });
@@ -162,7 +165,7 @@ impl GameSession {
             id: self.id.clone(),
             actions: self.actions.clone(),
             current_multiplier: Some(self.current_multiplier),
-            potential_payout: Some((self.src as f64 * self.current_multiplier) as u32),
+            potential_payout: Some(self.src * self.current_multiplier),
             final_payout: None,
             bomb_blocks: None,
             session_status: self.status.clone(),
@@ -179,7 +182,7 @@ impl GameSession {
         }
 
         self.status = SessionStatus::Ended;
-        let final_payout = (self.src as f64 * self.current_multiplier) as u32;
+        let final_payout = self.src * self.current_multiplier;
         Ok(CashoutResponse {
             id: self.id.clone(),
             src: self.src,

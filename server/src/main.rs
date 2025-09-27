@@ -1,7 +1,6 @@
 use crate::{
     auth::{AuthLayer, router as auth_router},
     deposit_monitor::{DepositMonitor, DepositMonitorConfig},
-    mines::router,
     server::AppState,
     store::Store,
     wallet::router as wallet_router,
@@ -71,14 +70,12 @@ async fn main() {
         .allow_headers(Any);
 
     let apex_router = apex::router(Arc::new(app_state.clone()));
-    let mines_router = router(Arc::new(app_state.clone())).await;
     let wallet_router = wallet_router(Arc::new(app_state.clone())).await;
     let auth_router = auth_router(Arc::new(app_state.clone())).await;
 
-    // Apply authentication only to apex, mines, and auth routers
+    // Apply authentication only to apex and auth routers (mines moved to wallet router)
     let protected_router = Router::new()
         .merge(apex_router)
-        .merge(mines_router)
         .merge(auth_router)
         .layer(AuthLayer {
             expected_secret: "X-Server-secret".to_string(),
