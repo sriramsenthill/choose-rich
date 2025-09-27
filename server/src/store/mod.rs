@@ -12,7 +12,8 @@ pub struct User {
     pub pk: String,
     pub evm_addr: String,
     pub original_wallet_addr: Option<String>,
-    pub game_balance: BigDecimal,
+    pub account_balance: BigDecimal,
+    pub in_game_balance: BigDecimal,
     #[serde(with = "chrono::serde::ts_seconds_option")]
     pub created_at: Option<DateTime<Utc>>,
     #[serde(with = "chrono::serde::ts_seconds_option")]
@@ -40,18 +41,20 @@ impl User {
         pk: String,
         evm_addr: String,
         original_wallet_addr: Option<String>,
-        game_balance: BigDecimal,
+        account_balance: BigDecimal,
+        in_game_balance: BigDecimal,
     ) -> Self {
         Self {
-            user_id, // Will be set by DB
+            user_id,
             username,
             password,
             pk,
             evm_addr,
             original_wallet_addr,
-            game_balance,
-            created_at: None, // Will be set by DB
-            updated_at: None, // Will be set by DB
+            account_balance,
+            in_game_balance,
+            created_at: None,
+            updated_at: None,
         }
     }
 }

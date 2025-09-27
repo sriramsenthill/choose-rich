@@ -269,10 +269,10 @@ impl DepositMonitor {
             .await?
             .ok_or_else(|| format!("User not found for address: {}", deposit.to_address))?;
 
-        // Update user balance
+        // Update user balance - deposit adds to both account and in-game balance
         let updated_user = self
             .store
-            .adjust_user_balance(&user.user_id, &deposit.amount)
+            .process_deposit(&user.user_id, &deposit.amount)
             .await?;
 
         // Record transaction
@@ -293,8 +293,8 @@ impl DepositMonitor {
         let recorded_transaction = self.store.create_transaction(&transaction).await?;
 
         info!(
-            "Successfully processed deposit of {} for user {} to address {} - new balance: {}",
-            deposit.amount, user.user_id, deposit.to_address, updated_user.game_balance
+            "Successfully processed deposit of {} for user {} to address {} - new account balance: {}, new in-game balance: {}",
+            deposit.amount, user.user_id, deposit.to_address, updated_user.account_balance, updated_user.in_game_balance
         );
 
         Ok(ProcessedDeposit {
@@ -302,7 +302,7 @@ impl DepositMonitor {
             game_address: deposit.to_address,
             amount: deposit.amount,
             transaction_hash: deposit.transaction_hash,
-            new_balance: updated_user.game_balance,
+            new_balance: updated_user.account_balance, // Use account balance as it represents total deposited
             transaction_id: recorded_transaction.id,
         })
     }

@@ -188,15 +188,15 @@ async fn start_game(
         .map_err(|e| internal_error(&format!("Database error: {}", e)))?
         .ok_or_else(|| bad_request("User not found"))?;
 
-    // Check if user has enough balance
+    // Check if user has enough in-game balance
     let bet_amount = BigDecimal::from(payload.amount);
-    if user.game_balance < bet_amount {
-        return Err(bad_request("Insufficient balance"));
+    if user.in_game_balance < bet_amount {
+        return Err(bad_request("Insufficient in-game balance"));
     }
 
-    // Deduct bet amount from user's balance
-    let _updated_user = state.store.adjust_user_balance(&user.user_id, &(-bet_amount.clone())).await
-        .map_err(|e| internal_error(&format!("Failed to deduct balance: {}", e)))?;
+    // Deduct bet amount from user's in-game balance
+    let _updated_user = state.store.adjust_in_game_balance(&user.user_id, &(-bet_amount.clone())).await
+        .map_err(|e| internal_error(&format!("Failed to deduct in-game balance: {}", e)))?;
     let mut session = GameSession::new(payload.amount, payload.option.clone());
     let (
         payout_high,
@@ -218,7 +218,7 @@ async fn start_game(
             // Handle blinder result immediately since it's auto-resolved
             if blinder_result.won && blinder_result.payout > 0 {
                 let payout_amount = BigDecimal::from(blinder_result.payout);
-                let _updated_user = state.store.adjust_user_balance(&user.user_id, &payout_amount).await
+                let _updated_user = state.store.adjust_in_game_balance(&user.user_id, &payout_amount).await
                     .map_err(|e| internal_error(&format!("Failed to add winnings: {}", e)))?;
 
                 // Record win transaction
@@ -364,7 +364,7 @@ async fn make_choice(
     // Handle winnings
     if response.won && response.payout > 0 {
         let payout_amount = BigDecimal::from(response.payout);
-        let _updated_user = state.store.adjust_user_balance(&user.user_id, &payout_amount).await
+        let _updated_user = state.store.adjust_in_game_balance(&user.user_id, &payout_amount).await
             .map_err(|e| internal_error(&format!("Failed to add winnings: {}", e)))?;
 
         // Record win transaction

@@ -1,5 +1,5 @@
 use crate::{
-    auth::AuthLayer,
+    auth::{AuthLayer, router as auth_router},
     deposit_monitor::{DepositMonitor, DepositMonitorConfig},
     mines::router,
     server::AppState,
@@ -45,13 +45,13 @@ async fn main() {
     println!("Database migrations completed successfully!");
     let app_state = AppState::new(sessions, store.clone(), JWT_SECRET.to_string());
 
-    // Initialize and start deposit monitor
+    // Initialize and start deposit monitor (reduced frequency since we now have on-demand refresh)
     let monitor_config = DepositMonitorConfig {
-        check_interval_secs: 5,
+        check_interval_secs: 300, // Check every 5 minutes instead of 5 seconds
         required_confirmations: 3,
         rpc_url: None,
         enable_simulation: true,
-        simulation_probability: 0.02, // 2% chance per check cycle for demo
+        simulation_probability: 0.001, // Much lower probability since users can refresh manually
     };
 
     let deposit_monitor = DepositMonitor::new(store.clone(), monitor_config);
@@ -73,11 +73,13 @@ async fn main() {
     let apex_router = apex::router(Arc::new(app_state.clone()));
     let mines_router = router(Arc::new(app_state.clone())).await;
     let wallet_router = wallet_router(Arc::new(app_state.clone())).await;
+    let auth_router = auth_router(Arc::new(app_state.clone())).await;
 
-    // Apply authentication only to apex and mines routers
+    // Apply authentication only to apex, mines, and auth routers
     let protected_router = Router::new()
         .merge(apex_router)
         .merge(mines_router)
+        .merge(auth_router)
         .layer(AuthLayer {
             expected_secret: "X-Server-secret".to_string(),
             jwt_secret: JWT_SECRET.to_string(),

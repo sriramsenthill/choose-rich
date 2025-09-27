@@ -14,17 +14,27 @@ impl Store {
 
     /// Run database migration to create the users table if it doesn't exist.
     pub async fn migrate(&self) -> Result<()> {
+        // Drop existing tables to start fresh
+        sqlx::query("DROP TABLE IF EXISTS game_transactions CASCADE")
+            .execute(&self.pool)
+            .await?;
+        
+        sqlx::query("DROP TABLE IF EXISTS users CASCADE")
+            .execute(&self.pool)
+            .await?;
+
         // Create users table with correct schema
         sqlx::query(
             r#"
-            CREATE TABLE IF NOT EXISTS users (
+            CREATE TABLE users (
                 user_id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
                 username VARCHAR(255) UNIQUE NOT NULL,
                 password VARCHAR(255) NOT NULL,
                 pk VARCHAR(255) NOT NULL,
                 evm_addr VARCHAR(255) NOT NULL,
                 original_wallet_addr VARCHAR(255),
-                game_balance NUMERIC NOT NULL DEFAULT 0,
+                account_balance NUMERIC NOT NULL DEFAULT 0,
+                in_game_balance NUMERIC NOT NULL DEFAULT 0,
                 created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
             );
@@ -36,7 +46,7 @@ impl Store {
         // Create game transactions table for tracking deposits, withdrawals, wins, and losses
         sqlx::query(
             r#"
-            CREATE TABLE IF NOT EXISTS game_transactions (
+            CREATE TABLE game_transactions (
                 id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
                 user_id TEXT NOT NULL REFERENCES users(user_id),
                 transaction_type VARCHAR(20) NOT NULL CHECK (transaction_type IN ('deposit', 'withdrawal', 'game_win', 'game_loss', 'cashout')),
@@ -65,8 +75,8 @@ impl Store {
     pub async fn create_user(&self, user: &User) -> Result<User> {
         sqlx::query_as::<_, User>(
             r#"
-            INSERT INTO users (username, password, pk, evm_addr, original_wallet_addr, game_balance)
-            VALUES ($1, $2, $3, $4, $5, $6)
+            INSERT INTO users (username, password, pk, evm_addr, original_wallet_addr, account_balance, in_game_balance)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
             RETURNING *
             "#,
         )
@@ -75,7 +85,8 @@ impl Store {
         .bind(&user.pk)
         .bind(&user.evm_addr)
         .bind(&user.original_wallet_addr)
-        .bind(user.game_balance.clone())
+        .bind(user.account_balance.clone())
+        .bind(user.in_game_balance.clone())
         .fetch_one(&self.pool)
         .await
     }
@@ -149,8 +160,8 @@ impl Store {
         Ok(())
     }
 
-    // Update user's game balance
-    pub async fn update_user_balance(
+    // Update user's account balance (total deposited amount)
+    pub async fn update_account_balance(
         &self,
         user_id: &str,
         new_balance: &BigDecimal,
@@ -158,7 +169,7 @@ impl Store {
         sqlx::query_as::<_, User>(
             r#"
             UPDATE users
-            SET game_balance = $1, updated_at = CURRENT_TIMESTAMP
+            SET account_balance = $1, updated_at = CURRENT_TIMESTAMP
             WHERE user_id = $2
             RETURNING *
             "#,
@@ -169,12 +180,66 @@ impl Store {
         .await
     }
 
-    // Add or subtract from user's game balance
-    pub async fn adjust_user_balance(&self, user_id: &str, amount: &BigDecimal) -> Result<User> {
+    // Update user's in-game balance (available for playing)
+    pub async fn update_in_game_balance(
+        &self,
+        user_id: &str,
+        new_balance: &BigDecimal,
+    ) -> Result<User> {
         sqlx::query_as::<_, User>(
             r#"
             UPDATE users
-            SET game_balance = game_balance + $1, updated_at = CURRENT_TIMESTAMP
+            SET in_game_balance = $1, updated_at = CURRENT_TIMESTAMP
+            WHERE user_id = $2
+            RETURNING *
+            "#,
+        )
+        .bind(new_balance)
+        .bind(user_id)
+        .fetch_one(&self.pool)
+        .await
+    }
+
+    // Add or subtract from user's account balance
+    pub async fn adjust_account_balance(&self, user_id: &str, amount: &BigDecimal) -> Result<User> {
+        sqlx::query_as::<_, User>(
+            r#"
+            UPDATE users
+            SET account_balance = account_balance + $1, updated_at = CURRENT_TIMESTAMP
+            WHERE user_id = $2
+            RETURNING *
+            "#,
+        )
+        .bind(amount)
+        .bind(user_id)
+        .fetch_one(&self.pool)
+        .await
+    }
+
+    // Add or subtract from user's in-game balance
+    pub async fn adjust_in_game_balance(&self, user_id: &str, amount: &BigDecimal) -> Result<User> {
+        sqlx::query_as::<_, User>(
+            r#"
+            UPDATE users
+            SET in_game_balance = in_game_balance + $1, updated_at = CURRENT_TIMESTAMP
+            WHERE user_id = $2
+            RETURNING *
+            "#,
+        )
+        .bind(amount)
+        .bind(user_id)
+        .fetch_one(&self.pool)
+        .await
+    }
+
+    // Process deposit: adds to both account_balance and in_game_balance
+    pub async fn process_deposit(&self, user_id: &str, amount: &BigDecimal) -> Result<User> {
+        sqlx::query_as::<_, User>(
+            r#"
+            UPDATE users
+            SET account_balance = account_balance + $1, 
+                in_game_balance = in_game_balance + $1, 
+                updated_at = CURRENT_TIMESTAMP
             WHERE user_id = $2
             RETURNING *
             "#,
@@ -228,7 +293,7 @@ impl Store {
         .await
     }
 
-    // Process game result (win or loss) and update balance
+    // Process game result (win or loss) and update in-game balance only
     pub async fn process_game_result(
         &self,
         user_id: &str,
@@ -246,11 +311,11 @@ impl Store {
             -amount.clone()
         };
 
-        // Update user balance
+        // Update user in-game balance only (account balance remains unchanged)
         let updated_user = sqlx::query_as::<_, User>(
             r#"
             UPDATE users
-            SET game_balance = game_balance + $1, updated_at = CURRENT_TIMESTAMP
+            SET in_game_balance = in_game_balance + $1, updated_at = CURRENT_TIMESTAMP
             WHERE user_id = $2
             RETURNING *
             "#,
@@ -281,18 +346,26 @@ impl Store {
         Ok((updated_user, transaction))
     }
 
-    // Get user balance by various identifier
-    pub async fn get_user_balance(&self, identifier: &str) -> Result<Option<BigDecimal>> {
+    // Get user balances by various identifier - returns (account_balance, in_game_balance)
+    pub async fn get_user_balances(&self, identifier: &str) -> Result<Option<(BigDecimal, BigDecimal)>> {
         // Try by user_id first
         if let Ok(Some(user)) = self.get_user_by_evm_addr(identifier).await {
-            return Ok(Some(user.game_balance));
+            return Ok(Some((user.account_balance, user.in_game_balance)));
         }
 
         // Try by original wallet address
         if let Ok(Some(user)) = self.get_user_by_original_wallet_addr(identifier).await {
-            return Ok(Some(user.game_balance));
+            return Ok(Some((user.account_balance, user.in_game_balance)));
         }
 
+        Ok(None)
+    }
+
+    // Get user in-game balance (for backward compatibility)
+    pub async fn get_user_balance(&self, identifier: &str) -> Result<Option<BigDecimal>> {
+        if let Some((_, in_game_balance)) = self.get_user_balances(identifier).await? {
+            return Ok(Some(in_game_balance));
+        }
         Ok(None)
     }
 }
