@@ -1,5 +1,6 @@
 mod db_store;
 pub use db_store::*;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::types::BigDecimal;
 
@@ -11,7 +12,24 @@ pub struct User {
     pub pk: String,
     pub evm_addr: String,
     pub original_wallet_addr: Option<String>,
-    pub booky_balance: BigDecimal,
+    pub game_balance: BigDecimal,
+    #[serde(with = "chrono::serde::ts_seconds_option")]
+    pub created_at: Option<DateTime<Utc>>,
+    #[serde(with = "chrono::serde::ts_seconds_option")]
+    pub updated_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct GameTransaction {
+    pub id: String,
+    pub user_id: String,
+    pub transaction_type: String,
+    pub amount: BigDecimal,
+    pub game_type: Option<String>,
+    pub game_session_id: Option<String>,
+    pub description: Option<String>,
+    #[serde(with = "chrono::serde::ts_seconds_option")]
+    pub created_at: Option<DateTime<Utc>>,
 }
 
 impl User {
@@ -22,7 +40,7 @@ impl User {
         pk: String,
         evm_addr: String,
         original_wallet_addr: Option<String>,
-        booky_balance: BigDecimal,
+        game_balance: BigDecimal,
     ) -> Self {
         Self {
             user_id, // Will be set by DB
@@ -31,7 +49,9 @@ impl User {
             pk,
             evm_addr,
             original_wallet_addr,
-            booky_balance,
+            game_balance,
+            created_at: None, // Will be set by DB
+            updated_at: None, // Will be set by DB
         }
     }
 }

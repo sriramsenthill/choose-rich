@@ -1,8 +1,9 @@
 use crate::{
     primitives::new_moka_cache,
     server::{AppState, Service},
+    store::GameTransaction,
 };
-use axum::{Router, extract::State, response::Json, routing::post};
+use axum::{Router, extract::State, response::Json, routing::post, Extension};
 use garden::api::{
     bad_request, internal_error,
     primitives::{ApiResult, Response},
@@ -10,6 +11,7 @@ use garden::api::{
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use serde_json::to_value;
+use sqlx::types::BigDecimal;
 use std::{sync::Arc, time::Duration};
 use uuid::Uuid;
 
@@ -178,8 +180,23 @@ impl GameSession {
 
 async fn start_game(
     State(state): State<Arc<AppState>>,
+    Extension(user_addr): Extension<String>,
     Json(payload): Json<StartGameRequest>,
 ) -> ApiResult<StartGameResponse> {
+    // Get user from database
+    let user = state.store.get_user_by_wallet_addr(&user_addr).await
+        .map_err(|e| internal_error(&format!("Database error: {}", e)))?
+        .ok_or_else(|| bad_request("User not found"))?;
+
+    // Check if user has enough balance
+    let bet_amount = BigDecimal::from(payload.amount);
+    if user.game_balance < bet_amount {
+        return Err(bad_request("Insufficient balance"));
+    }
+
+    // Deduct bet amount from user's balance
+    let _updated_user = state.store.adjust_user_balance(&user.user_id, &(-bet_amount.clone())).await
+        .map_err(|e| internal_error(&format!("Failed to deduct balance: {}", e)))?;
     let mut session = GameSession::new(payload.amount, payload.option.clone());
     let (
         payout_high,
@@ -197,6 +214,42 @@ async fn start_game(
                 .map_err(|e| bad_request(&e.to_string()))?;
             let probability = 0.45; // 45% win probability
             let payout_percentage = (1.0 - 0.01) / probability;
+            
+            // Handle blinder result immediately since it's auto-resolved
+            if blinder_result.won && blinder_result.payout > 0 {
+                let payout_amount = BigDecimal::from(blinder_result.payout);
+                let _updated_user = state.store.adjust_user_balance(&user.user_id, &payout_amount).await
+                    .map_err(|e| internal_error(&format!("Failed to add winnings: {}", e)))?;
+
+                // Record win transaction
+                let win_transaction = GameTransaction {
+                    id: String::new(),
+                    user_id: user.user_id.clone(),
+                    transaction_type: "game_win".to_string(),
+                    amount: payout_amount,
+                    game_type: Some("apex".to_string()),
+                    game_session_id: Some(session.id.clone()),
+                    description: Some(format!("Apex blinder win - {} payout", blinder_result.payout)),
+                    created_at: None,
+                };
+                let _win_recorded = state.store.create_transaction(&win_transaction).await
+                    .map_err(|e| internal_error(&format!("Failed to record win transaction: {}", e)))?;
+            }
+
+            // Record initial bet transaction
+            let bet_transaction = GameTransaction {
+                id: String::new(),
+                user_id: user.user_id.clone(),
+                transaction_type: if blinder_result.won { "game_win" } else { "game_loss" }.to_string(),
+                amount: bet_amount.clone(),
+                game_type: Some("apex".to_string()),
+                game_session_id: Some(session.id.clone()),
+                description: Some("Apex blinder game bet".to_string()),
+                created_at: None,
+            };
+            let _bet_recorded = state.store.create_transaction(&bet_transaction).await
+                .map_err(|e| internal_error(&format!("Failed to record bet transaction: {}", e)))?;
+
             (
                 None,
                 None,
@@ -223,6 +276,21 @@ async fn start_game(
                 0.0
             };
             let equal_payout = (1.0 - 0.01) / equal_prob;
+
+            // Record initial bet transaction for non-blinder (will be resolved when choice is made)
+            let bet_transaction = GameTransaction {
+                id: String::new(),
+                user_id: user.user_id.clone(),
+                transaction_type: "game_loss".to_string(), // Initially treat as loss, will add win if they win
+                amount: bet_amount.clone(),
+                game_type: Some("apex".to_string()),
+                game_session_id: Some(session.id.clone()),
+                description: Some("Apex non-blinder game bet".to_string()),
+                created_at: None,
+            };
+            let _bet_recorded = state.store.create_transaction(&bet_transaction).await
+                .map_err(|e| internal_error(&format!("Failed to record bet transaction: {}", e)))?;
+
             (
                 Some(high_payout),
                 Some(high_prob),
@@ -270,8 +338,14 @@ async fn start_game(
 
 async fn make_choice(
     State(state): State<Arc<AppState>>,
+    Extension(user_addr): Extension<String>,
     Json(payload): Json<ChooseRequest>,
 ) -> ApiResult<ChooseResponse> {
+    // Get user from database
+    let user = state.store.get_user_by_wallet_addr(&user_addr).await
+        .map_err(|e| internal_error(&format!("Database error: {}", e)))?
+        .ok_or_else(|| bad_request("User not found"))?;
+
     let service_state = state
         .sessions
         .get(&Service::Apex)
@@ -282,9 +356,32 @@ async fn make_choice(
         .await
         .and_then(|v| serde_json::from_value(v.clone()).ok())
         .ok_or(bad_request("Session not found"))?;
+    
     let response = session
         .make_choice(payload.choice)
         .map_err(|e| bad_request(&e.to_string()))?;
+    
+    // Handle winnings
+    if response.won && response.payout > 0 {
+        let payout_amount = BigDecimal::from(response.payout);
+        let _updated_user = state.store.adjust_user_balance(&user.user_id, &payout_amount).await
+            .map_err(|e| internal_error(&format!("Failed to add winnings: {}", e)))?;
+
+        // Record win transaction
+        let win_transaction = GameTransaction {
+            id: String::new(),
+            user_id: user.user_id.clone(),
+            transaction_type: "game_win".to_string(),
+            amount: payout_amount,
+            game_type: Some("apex".to_string()),
+            game_session_id: Some(session.id.clone()),
+            description: Some(format!("Apex choice win - {} payout from choice {:?}", response.payout, response.choice)),
+            created_at: None,
+        };
+        let _win_recorded = state.store.create_transaction(&win_transaction).await
+            .map_err(|e| internal_error(&format!("Failed to record win transaction: {}", e)))?;
+    }
+
     service_state
         .insert(
             session.id.clone(),

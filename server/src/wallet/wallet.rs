@@ -70,7 +70,7 @@ pub async fn connect_wallet(
         evm_private_key, // pk (game private key)
         evm_address, // evm_addr (game EVM address)
         Some(wallet_address.clone()), // original_wallet_addr (the wallet they connected with)
-        BigDecimal::from(0), // initial balance
+        BigDecimal::from(0), // initial game balance
     );
 
     let created_user = store.create_user(&new_user).await

@@ -5,17 +5,19 @@ use crate::{
     },
     primitives::new_moka_cache,
     server::{AppState, Service},
+    store::GameTransaction,
 };
 use axum::{
     Extension, Json, Router,
     extract::State,
-    routing::{get, post},
+    routing::post,
 };
 use garden::api::{
     bad_request, internal_error,
     primitives::{ApiResult, Response},
 };
 use serde_json::to_value;
+use sqlx::types::BigDecimal;
 use std::sync::Arc;
 
 async fn start_game(
@@ -23,8 +25,39 @@ async fn start_game(
     Extension(user_addr): Extension<String>,
     Json(payload): Json<StartGameRequest>,
 ) -> ApiResult<StartGameResponse> {
-    let session = GameSession::new(payload.amount, payload.blocks, payload.mines, user_addr)
+    // Get user from database
+    let user = state.store.get_user_by_wallet_addr(&user_addr).await
+        .map_err(|e| internal_error(&format!("Database error: {}", e)))?
+        .ok_or_else(|| bad_request("User not found"))?;
+
+    // Check if user has enough balance
+    let bet_amount = BigDecimal::from(payload.amount);
+    if user.game_balance < bet_amount {
+        return Err(bad_request("Insufficient balance"));
+    }
+
+    // Deduct bet amount from user's balance
+    let _updated_user = state.store.adjust_user_balance(&user.user_id, &(-bet_amount.clone())).await
+        .map_err(|e| internal_error(&format!("Failed to deduct balance: {}", e)))?;
+
+    let session = GameSession::new(payload.amount, payload.blocks, payload.mines, user.user_id.clone())
         .map_err(|e| bad_request(&e.to_string()))?;
+
+    // Record game start transaction
+    let transaction = GameTransaction {
+        id: String::new(),
+        user_id: user.user_id.clone(),
+        transaction_type: "game_loss".to_string(), // Initially treat as loss, will change if they win
+        amount: bet_amount,
+        game_type: Some("mines".to_string()),
+        game_session_id: Some(session.id.clone()),
+        description: Some("Mines game bet".to_string()),
+        created_at: None,
+    };
+
+    let _recorded_transaction = state.store.create_transaction(&transaction).await
+        .map_err(|e| internal_error(&format!("Failed to record transaction: {}", e)))?;
+
     let response = StartGameResponse {
         id: session.id.clone(),
         amount: payload.amount,
@@ -57,6 +90,11 @@ async fn make_move(
     Extension(user_addr): Extension<String>,
     Json(payload): Json<MoveRequest>,
 ) -> ApiResult<MoveResponse> {
+    // Get user from database
+    let user = state.store.get_user_by_wallet_addr(&user_addr).await
+        .map_err(|e| internal_error(&format!("Database error: {}", e)))?
+        .ok_or_else(|| bad_request("User not found"))?;
+
     let service_state = state
         .sessions
         .get(&Service::Mines)
@@ -69,7 +107,7 @@ async fn make_move(
         .ok_or(bad_request("Session not found"))?;
 
     let response = session
-        .make_move(payload.block, user_addr)
+        .make_move(payload.block, user.user_id.clone())
         .map_err(|e| bad_request(&e.to_string()))?;
     service_state
         .insert(
@@ -79,8 +117,9 @@ async fn make_move(
         .await;
 
     if response.session_status == SessionStatus::Ended {
-        // if the session is ended, delete the session
-        // state.store.upda
+        // If the game ended (hit a mine), no additional balance changes needed
+        // as the bet was already deducted when the game started
+        service_state.remove(&payload.id).await;
     }
 
     Ok(Response::ok(response))
@@ -91,6 +130,11 @@ async fn cashout(
     Extension(user_addr): Extension<String>,
     Json(payload): Json<CashoutRequest>,
 ) -> ApiResult<CashoutResponse> {
+    // Get user from database
+    let user = state.store.get_user_by_wallet_addr(&user_addr).await
+        .map_err(|e| internal_error(&format!("Database error: {}", e)))?
+        .ok_or_else(|| bad_request("User not found"))?;
+
     let service_state = state
         .sessions
         .get(&Service::Mines)
@@ -103,8 +147,31 @@ async fn cashout(
         .ok_or(bad_request("Session not found"))?;
 
     let response = session
-        .cashout(user_addr)
+        .cashout(user.user_id.clone())
         .map_err(|e| bad_request(&e.to_string()))?;
+
+    // Add winnings to user's balance
+    let payout_amount = BigDecimal::from(response.final_payout);
+    if payout_amount > BigDecimal::from(0) {
+        let _updated_user = state.store.adjust_user_balance(&user.user_id, &payout_amount).await
+            .map_err(|e| internal_error(&format!("Failed to add winnings: {}", e)))?;
+
+        // Record win transaction
+        let win_transaction = GameTransaction {
+            id: String::new(),
+            user_id: user.user_id.clone(),
+            transaction_type: "game_win".to_string(),
+            amount: payout_amount,
+            game_type: Some("mines".to_string()),
+            game_session_id: Some(session.id.clone()),
+            description: Some(format!("Mines game cashout - won {} from bet of {}", response.final_payout, response.src)),
+            created_at: None,
+        };
+
+        let _win_recorded = state.store.create_transaction(&win_transaction).await
+            .map_err(|e| internal_error(&format!("Failed to record win transaction: {}", e)))?;
+    }
+
     service_state
         .insert(
             session.id.clone(),
@@ -339,7 +406,7 @@ mod tests {
 
             // Calculate expected multiplier with house edge
             let safe_picks = (i + 1) as u32;
-            let remaining_safe = 25 - 5 - i as u32;
+            let _remaining_safe = 25 - 5 - i as u32;
             let theoretical_multiplier = (0..safe_picks).fold(1.0, |acc, j| {
                 let remaining = 25 - 5 - j;
                 acc * 25.0 / remaining as f64
