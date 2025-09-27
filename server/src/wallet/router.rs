@@ -20,6 +20,11 @@ use crate::mines::{
     CashoutRequest as MinesCashoutRequest, CashoutResponse as MinesCashoutResponse, 
     MoveRequest, MoveResponse, StartGameRequest, StartGameResponse, GameSession, SessionStatus
 };
+use crate::apex::{
+    StartGameRequest as ApexStartGameRequest, StartGameResponse as ApexStartGameResponse,
+    ChooseRequest as ApexChooseRequest, ChooseResponse as ApexChooseResponse,
+    GameSession as ApexGameSession, GameOption
+};
 use crate::primitives::new_moka_cache;
 use crate::server::Service;
 use serde_json::to_value;
@@ -604,6 +609,219 @@ async fn cashout_mines_game(
     Ok(Response::ok(response))
 }
 
+// Apex game functions
+async fn start_apex_game(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<ApexStartGameRequest>,
+) -> ApiResult<ApexStartGameResponse> {
+    // Get user from database using game_address
+    let user = state.store.get_user_by_evm_addr(&payload.game_address).await
+        .map_err(|e| garden::api::internal_error(&format!("Database error: {}", e)))?
+        .ok_or_else(|| garden::api::bad_request("User not found for game address"))?;
+
+    // Check if user has enough in-game balance
+    let bet_amount = BigDecimal::from_str(&payload.amount.to_string())
+        .map_err(|_| garden::api::bad_request("Invalid amount format"))?;
+    if user.in_game_balance < bet_amount {
+        return Err(garden::api::bad_request("Insufficient in-game balance"));
+    }
+
+    // Deduct bet amount from user's in-game balance
+    let _updated_user = state.store.adjust_in_game_balance(&user.user_id, &(-bet_amount.clone())).await
+        .map_err(|e| garden::api::internal_error(&format!("Failed to deduct in-game balance: {}", e)))?;
+
+    let session = ApexGameSession::new(payload.amount, payload.option.clone());
+
+    // Handle different game options
+    let (payout_high, probability_high, payout_low, probability_low, payout_equal, probability_equal, payout_percentage, blinder_result) = match payload.option {
+        GameOption::Blinder => {
+            let mut session_mut = session.clone();
+            let blinder_result = session_mut.get_blinder_result()
+                .map_err(|e| garden::api::bad_request(&e.to_string()))?;
+            let probability = 0.45; // 45% win probability
+            let payout_percentage = (1.0 - 0.01) / probability;
+            
+            // Handle blinder result immediately since it's auto-resolved
+            if blinder_result.won && blinder_result.payout > 0.0 {
+                let payout_amount = BigDecimal::from_str(&blinder_result.payout.to_string())
+                    .map_err(|_| garden::api::internal_error("Invalid payout amount"))?;
+                let _updated_user = state.store.adjust_in_game_balance(&user.user_id, &payout_amount).await
+                    .map_err(|e| garden::api::internal_error(&format!("Failed to add winnings: {}", e)))?;
+
+                // Record win transaction
+                let win_transaction = crate::store::GameTransaction {
+                    id: String::new(),
+                    user_id: user.user_id.clone(),
+                    transaction_type: "game_win".to_string(),
+                    amount: payout_amount,
+                    game_type: Some("apex".to_string()),
+                    game_session_id: Some(session.id.clone()),
+                    description: Some("Apex blinder game win".to_string()),
+                    created_at: None,
+                };
+                let _win_recorded = state.store.create_transaction(&win_transaction).await
+                    .map_err(|e| garden::api::internal_error(&format!("Failed to record win transaction: {}", e)))?;
+            }
+
+            // Record initial bet transaction
+            let bet_transaction = crate::store::GameTransaction {
+                id: String::new(),
+                user_id: user.user_id.clone(),
+                transaction_type: if blinder_result.won { "game_win" } else { "game_loss" }.to_string(),
+                amount: bet_amount.clone(),
+                game_type: Some("apex".to_string()),
+                game_session_id: Some(session.id.clone()),
+                description: Some("Apex blinder game bet".to_string()),
+                created_at: None,
+            };
+            let _bet_recorded = state.store.create_transaction(&bet_transaction).await
+                .map_err(|e| garden::api::internal_error(&format!("Failed to record bet transaction: {}", e)))?;
+
+            (
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                Some(payout_percentage),
+                Some(blinder_result),
+            )
+        }
+        GameOption::NonBlinder => {
+            let high_prob = (9 - session.system_number) as f64 / 10.0;
+            let low_prob = session.system_number as f64 / 10.0;
+            let equal_prob = 1.0 / 10.0;
+            let high_payout = if high_prob > 0.0 {
+                (1.0 - 0.01) / high_prob
+            } else {
+                0.0
+            };
+            let low_payout = if low_prob > 0.0 {
+                (1.0 - 0.01) / low_prob
+            } else {
+                0.0
+            };
+            let equal_payout = (1.0 - 0.01) / equal_prob;
+
+            // Record initial bet transaction for non-blinder (will be resolved when choice is made)
+            let bet_transaction = crate::store::GameTransaction {
+                id: String::new(),
+                user_id: user.user_id.clone(),
+                transaction_type: "game_loss".to_string(), // Initially treat as loss, will add win if they win
+                amount: bet_amount.clone(),
+                game_type: Some("apex".to_string()),
+                game_session_id: Some(session.id.clone()),
+                description: Some("Apex non-blinder game bet".to_string()),
+                created_at: None,
+            };
+            let _bet_recorded = state.store.create_transaction(&bet_transaction).await
+                .map_err(|e| garden::api::internal_error(&format!("Failed to record bet transaction: {}", e)))?;
+
+            (
+                Some(high_payout),
+                Some(high_prob),
+                Some(low_payout),
+                Some(low_prob),
+                Some(equal_payout),
+                Some(equal_prob),
+                None,
+                None,
+            )
+        }
+    };
+
+    let response = ApexStartGameResponse {
+        id: session.id.clone(),
+        amount: payload.amount,
+        option: payload.option,
+        system_number: session.system_number,
+        user_number: session.user_number,
+        payout_high,
+        probability_high,
+        payout_low,
+        probability_low,
+        payout_equal,
+        probability_equal,
+        payout_percentage,
+        blinder_suit: blinder_result,
+        session_status: session.status.clone(),
+    };
+
+    let service_state = match state.sessions.get(&Service::Apex).await {
+        Some(cache) => cache,
+        None => {
+            let cache = new_moka_cache(std::time::Duration::from_secs(30 * 60));
+            state.sessions.insert(Service::Apex, cache.clone()).await;
+            cache
+        }
+    };
+
+    service_state
+        .insert(
+            session.id.clone(),
+            to_value(&session).map_err(|_| garden::api::internal_error("Serialization error"))?,
+        )
+        .await;
+
+    Ok(Response::ok(response))
+}
+
+async fn make_apex_choice(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<ApexChooseRequest>,
+) -> ApiResult<ApexChooseResponse> {
+    // Get user from database using game_address
+    let user = state.store.get_user_by_evm_addr(&payload.game_address).await
+        .map_err(|e| garden::api::internal_error(&format!("Database error: {}", e)))?
+        .ok_or_else(|| garden::api::bad_request("User not found for game address"))?;
+
+    let service_state = state
+        .sessions
+        .get(&Service::Apex)
+        .await
+        .ok_or(garden::api::bad_request("Session not found"))?;
+    let mut session: ApexGameSession = service_state
+        .get(&payload.id)
+        .await
+        .and_then(|v| serde_json::from_value(v.clone()).ok())
+        .ok_or(garden::api::bad_request("Session not found"))?;
+    
+    let response = session
+        .make_choice(payload.choice)
+        .map_err(|e| garden::api::bad_request(&e.to_string()))?;
+    
+    // Handle winnings
+    if response.won && response.payout > 0.0 {
+        let payout_amount = BigDecimal::from_str(&response.payout.to_string())
+            .map_err(|_| garden::api::internal_error("Invalid payout amount"))?;
+        let _updated_user = state.store.adjust_in_game_balance(&user.user_id, &payout_amount).await
+            .map_err(|e| garden::api::internal_error(&format!("Failed to add winnings: {}", e)))?;
+
+        // Record win transaction
+        let win_transaction = crate::store::GameTransaction {
+            id: String::new(),
+            user_id: user.user_id.clone(),
+            transaction_type: "game_win".to_string(),
+            amount: payout_amount,
+            game_type: Some("apex".to_string()),
+            game_session_id: Some(session.id.clone()),
+            description: Some(format!("Apex choice win - {} payout from choice {:?}", response.payout, response.choice)),
+            created_at: None,
+        };
+        let _win_recorded = state.store.create_transaction(&win_transaction).await
+            .map_err(|e| garden::api::internal_error(&format!("Failed to record win transaction: {}", e)))?;
+    }
+
+    service_state
+        .insert(
+            session.id.clone(),
+            to_value(&session).map_err(|_| garden::api::internal_error("Serialization error"))?,
+        )
+        .await;
+    Ok(Response::ok(response))
+}
+
 async fn health_check() -> &'static str {
     "Wallet API is running!"
 }
@@ -623,5 +841,7 @@ pub async fn router(state: Arc<AppState>) -> Router {
         .route("/mines/start", post(start_mines_game))
         .route("/mines/move", post(make_mines_move))
         .route("/mines/cashout", post(cashout_mines_game))
+        .route("/apex/start", post(start_apex_game))
+        .route("/apex/choose", post(make_apex_choice))
         .with_state(state)
 }

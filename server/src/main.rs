@@ -69,13 +69,11 @@ async fn main() {
         .allow_methods(Any)
         .allow_headers(Any);
 
-    let apex_router = apex::router(Arc::new(app_state.clone()));
     let wallet_router = wallet_router(Arc::new(app_state.clone())).await;
     let auth_router = auth_router(Arc::new(app_state.clone())).await;
 
-    // Apply authentication only to apex and auth routers (mines moved to wallet router)
+    // Apply authentication only to auth router (mines and apex moved to wallet router)
     let protected_router = Router::new()
-        .merge(apex_router)
         .merge(auth_router)
         .layer(AuthLayer {
             expected_secret: "X-Server-secret".to_string(),

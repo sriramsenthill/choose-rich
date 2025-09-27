@@ -12,14 +12,15 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 use serde_json::to_value;
 use sqlx::types::BigDecimal;
-use std::{sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration, str::FromStr};
 use uuid::Uuid;
 
 const SESSION_TTL: Duration = Duration::from_secs(30 * 60);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StartGameRequest {
-    pub amount: u32,
+    pub game_address: String,
+    pub amount: f64,
     pub option: GameOption,
 }
 
@@ -32,7 +33,7 @@ pub enum GameOption {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StartGameResponse {
     pub id: String,
-    pub amount: u32,
+    pub amount: f64,
     pub option: GameOption,
     pub system_number: u32,
     pub user_number: Option<u32>, // Only for blinder mode
@@ -50,11 +51,12 @@ pub struct StartGameResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BlinderSuit {
     pub won: bool,
-    pub payout: u32,
+    pub payout: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChooseRequest {
+    pub game_address: String,
     pub id: String,
     pub choice: Choice,
 }
@@ -73,14 +75,14 @@ pub struct ChooseResponse {
     pub user_number: u32,
     pub system_number: u32,
     pub won: bool,
-    pub payout: u32,
+    pub payout: f64,
     pub session_status: SessionStatus,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GameSession {
     pub id: String,
-    pub amount: u32,
+    pub amount: f64,
     pub option: GameOption,
     pub system_number: u32,
     pub user_number: Option<u32>,
@@ -94,7 +96,7 @@ pub enum SessionStatus {
 }
 
 impl GameSession {
-    pub fn new(amount: u32, option: GameOption) -> Self {
+    pub fn new(amount: f64, option: GameOption) -> Self {
         let mut rng = rand::thread_rng();
         let system_number = rng.gen_range(0..=9);
         let user_number = match option {
@@ -142,9 +144,9 @@ impl GameSession {
             Choice::Equal => user_number == self.system_number,
         };
         let payout = if won {
-            (self.amount as f64 * payout_multiplier) as u32
+            self.amount * payout_multiplier
         } else {
-            0
+            0.0
         };
         Ok(ChooseResponse {
             id: self.id.clone(),
@@ -170,9 +172,9 @@ impl GameSession {
         let probability = 0.45; // 45% chance of winning (user_number > system_number)
         let payout_multiplier = (1.0 - 0.01) / probability; // 1% house edge
         let payout = if won {
-            (self.amount as f64 * payout_multiplier) as u32
+            self.amount * payout_multiplier
         } else {
-            0
+            0.0
         };
         Ok(BlinderSuit { won, payout })
     }
@@ -189,7 +191,8 @@ async fn start_game(
         .ok_or_else(|| bad_request("User not found"))?;
 
     // Check if user has enough in-game balance
-    let bet_amount = BigDecimal::from(payload.amount);
+    let bet_amount = BigDecimal::from_str(&payload.amount.to_string())
+        .map_err(|_| bad_request("Invalid amount format"))?;
     if user.in_game_balance < bet_amount {
         return Err(bad_request("Insufficient in-game balance"));
     }
@@ -216,8 +219,9 @@ async fn start_game(
             let payout_percentage = (1.0 - 0.01) / probability;
             
             // Handle blinder result immediately since it's auto-resolved
-            if blinder_result.won && blinder_result.payout > 0 {
-                let payout_amount = BigDecimal::from(blinder_result.payout);
+            if blinder_result.won && blinder_result.payout > 0.0 {
+                let payout_amount = BigDecimal::from_str(&blinder_result.payout.to_string())
+                    .map_err(|_| internal_error("Invalid payout amount"))?;
                 let _updated_user = state.store.adjust_in_game_balance(&user.user_id, &payout_amount).await
                     .map_err(|e| internal_error(&format!("Failed to add winnings: {}", e)))?;
 
@@ -362,8 +366,9 @@ async fn make_choice(
         .map_err(|e| bad_request(&e.to_string()))?;
     
     // Handle winnings
-    if response.won && response.payout > 0 {
-        let payout_amount = BigDecimal::from(response.payout);
+    if response.won && response.payout > 0.0 {
+        let payout_amount = BigDecimal::from_str(&response.payout.to_string())
+            .map_err(|_| internal_error("Invalid payout amount"))?;
         let _updated_user = state.store.adjust_in_game_balance(&user.user_id, &payout_amount).await
             .map_err(|e| internal_error(&format!("Failed to add winnings: {}", e)))?;
 
