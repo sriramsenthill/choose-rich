@@ -630,7 +630,8 @@ async fn start_apex_game(
     let _updated_user = state.store.adjust_in_game_balance(&user.user_id, &(-bet_amount.clone())).await
         .map_err(|e| garden::api::internal_error(&format!("Failed to deduct in-game balance: {}", e)))?;
 
-    let session = ApexGameSession::new(payload.amount, payload.option.clone());
+    let session = ApexGameSession::new(payload.amount, payload.option.clone()).await
+        .map_err(|e| garden::api::internal_error(&format!("Failed to create game session: {}", e)))?;
 
     // Handle different game options
     let (payout_high, probability_high, payout_low, probability_low, payout_equal, probability_equal, payout_percentage, blinder_result) = match payload.option {
@@ -788,7 +789,7 @@ async fn make_apex_choice(
         .ok_or(garden::api::bad_request("Session not found"))?;
     
     let response = session
-        .make_choice(payload.choice)
+        .make_choice(payload.choice).await
         .map_err(|e| garden::api::bad_request(&e.to_string()))?;
     
     // Handle winnings
