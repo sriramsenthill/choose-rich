@@ -1,9 +1,17 @@
-use crate::{auth::AuthLayer, mines::router, server::AppState, store::Store, wallet::router as wallet_router};
+use crate::{
+    auth::AuthLayer,
+    deposit_monitor::{DepositMonitor, DepositMonitorConfig},
+    mines::router,
+    server::AppState,
+    store::Store,
+    wallet::router as wallet_router,
+};
 use axum::{Router, routing::get};
 use moka::future::Cache;
 use std::sync::Arc;
 mod apex;
 mod auth;
+mod deposit_monitor;
 mod mines;
 mod primitives;
 mod server;
@@ -18,18 +26,42 @@ async fn main() {
     let sessions = Arc::new(Cache::builder().build());
     let pg_default = "postgresql://postgres:postgres@localhost:5432/postgres";
     println!("Attempting to connect to database: {}", pg_default);
-    
+
     let pool = sqlx::postgres::PgPoolOptions::new()
         .max_connections(200)
         .connect(pg_default)
         .await
-        .expect("Failed to connect to database. Please ensure PostgreSQL is running on localhost:5432");
-    
+        .expect(
+            "Failed to connect to database. Please ensure PostgreSQL is running on localhost:5432",
+        );
+
     println!("Successfully connected to database!");
     println!("Running database migrations...");
-    let store = Arc::new(Store::new(pool).await.expect("Failed to create store or run migrations"));
+    let store = Arc::new(
+        Store::new(pool)
+            .await
+            .expect("Failed to create store or run migrations"),
+    );
     println!("Database migrations completed successfully!");
-    let app_state = AppState::new(sessions, store, JWT_SECRET.to_string());
+    let app_state = AppState::new(sessions, store.clone(), JWT_SECRET.to_string());
+
+    // Initialize and start deposit monitor
+    let monitor_config = DepositMonitorConfig {
+        check_interval_secs: 5,
+        required_confirmations: 3,
+        rpc_url: None,
+        enable_simulation: true,
+        simulation_probability: 0.02, // 2% chance per check cycle for demo
+    };
+
+    let deposit_monitor = DepositMonitor::new(store.clone(), monitor_config);
+
+    // Start the deposit monitor
+    if let Err(e) = deposit_monitor.start().await {
+        eprintln!("Failed to start deposit monitor: {}", e);
+    } else {
+        println!("Deposit monitor started successfully!");
+    }
 
     use tower_http::cors::{Any, CorsLayer};
 
@@ -41,7 +73,7 @@ async fn main() {
     let apex_router = apex::router(Arc::new(app_state.clone()));
     let mines_router = router(Arc::new(app_state.clone())).await;
     let wallet_router = wallet_router(Arc::new(app_state.clone())).await;
-    
+
     // Apply authentication only to apex and mines routers
     let protected_router = Router::new()
         .merge(apex_router)
@@ -50,7 +82,7 @@ async fn main() {
             expected_secret: "X-Server-secret".to_string(),
             jwt_secret: JWT_SECRET.to_string(),
         });
-    
+
     let app_router = Router::new()
         .route("/", get(|| async { "Choose Rich API is running!" }))
         .merge(protected_router)

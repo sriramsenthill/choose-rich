@@ -1,15 +1,17 @@
 use crate::{
+    deposit_monitor::{DepositMonitor, DepositMonitorConfig},
     server::AppState,
-    wallet::{connect_wallet, WalletConnectionRequest, WalletConnectionResponse},
+    wallet::{WalletConnectionRequest, WalletConnectionResponse, connect_wallet},
 };
 use axum::{
-    extract::{State, Path},
-    routing::{post, get},
     Json, Router,
+    extract::{Path, State},
+    routing::{get, post},
 };
 use garden::api::primitives::{ApiResult, Response};
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
+use sqlx::types::BigDecimal;
+use std::{str::FromStr, sync::Arc};
 
 #[derive(Serialize)]
 struct GameAddressResponse {
@@ -56,6 +58,26 @@ struct TransactionHistoryResponse {
     total_count: usize,
 }
 
+#[derive(Serialize)]
+struct MonitorStatusResponse {
+    status: std::collections::HashMap<String, serde_json::Value>,
+}
+
+#[derive(Deserialize)]
+struct ForceDepositRequest {
+    user_id: String,
+    amount: String,
+}
+
+#[derive(Serialize)]
+struct ForceDepositResponse {
+    success: bool,
+    user_id: String,
+    amount: String,
+    new_balance: String,
+    transaction_id: String,
+}
+
 // Wallet connection endpoint
 async fn wallet_connect(
     State(state): State<Arc<AppState>>,
@@ -69,7 +91,10 @@ async fn get_game_address(
     State(state): State<Arc<AppState>>,
     Path(wallet_address): Path<String>,
 ) -> ApiResult<GameAddressResponse> {
-    let user = state.store.get_user_by_wallet_addr(&wallet_address).await
+    let user = state
+        .store
+        .get_user_by_wallet_addr(&wallet_address)
+        .await
         .map_err(|e| garden::api::internal_error(&format!("Database error: {}", e)))?
         .ok_or_else(|| garden::api::not_found("User not found"))?;
 
@@ -84,7 +109,10 @@ async fn get_balance(
     State(state): State<Arc<AppState>>,
     Path(address): Path<String>,
 ) -> ApiResult<BalanceResponse> {
-    let user = state.store.get_user_by_wallet_addr(&address).await
+    let user = state
+        .store
+        .get_user_by_wallet_addr(&address)
+        .await
         .map_err(|e| garden::api::internal_error(&format!("Database error: {}", e)))?
         .ok_or_else(|| garden::api::not_found("Address not found"))?;
 
@@ -103,8 +131,11 @@ async fn simulate_deposit(
 ) -> ApiResult<DepositResponse> {
     use sqlx::types::BigDecimal;
     use std::str::FromStr;
-    
-    let user = state.store.get_user_by_wallet_addr(&address).await
+
+    let user = state
+        .store
+        .get_user_by_wallet_addr(&address)
+        .await
         .map_err(|e| garden::api::internal_error(&format!("Database error: {}", e)))?
         .ok_or_else(|| garden::api::not_found("Address not found"))?;
 
@@ -112,7 +143,10 @@ async fn simulate_deposit(
         .map_err(|_| garden::api::bad_request("Invalid amount format"))?;
 
     // Update balance
-    let updated_user = state.store.adjust_user_balance(&user.user_id, &deposit_amount).await
+    let updated_user = state
+        .store
+        .adjust_user_balance(&user.user_id, &deposit_amount)
+        .await
         .map_err(|e| garden::api::internal_error(&format!("Failed to update balance: {}", e)))?;
 
     // Record transaction
@@ -127,8 +161,13 @@ async fn simulate_deposit(
         created_at: None,
     };
 
-    let recorded_transaction = state.store.create_transaction(&transaction).await
-        .map_err(|e| garden::api::internal_error(&format!("Failed to record transaction: {}", e)))?;
+    let recorded_transaction = state
+        .store
+        .create_transaction(&transaction)
+        .await
+        .map_err(|e| {
+            garden::api::internal_error(&format!("Failed to record transaction: {}", e))
+        })?;
 
     Ok(Response::ok(DepositResponse {
         success: true,
@@ -145,8 +184,11 @@ async fn cashout_funds(
 ) -> ApiResult<CashoutResponse> {
     use sqlx::types::BigDecimal;
     use std::str::FromStr;
-    
-    let user = state.store.get_user_by_wallet_addr(&address).await
+
+    let user = state
+        .store
+        .get_user_by_wallet_addr(&address)
+        .await
         .map_err(|e| garden::api::internal_error(&format!("Database error: {}", e)))?
         .ok_or_else(|| garden::api::not_found("Address not found"))?;
 
@@ -160,9 +202,12 @@ async fn cashout_funds(
 
     // In a real application, you would initiate an on-chain transaction here
     // For now, we'll just update the database and record the transaction
-    
+
     // Deduct from game balance
-    let updated_user = state.store.adjust_user_balance(&user.user_id, &(-cashout_amount.clone())).await
+    let updated_user = state
+        .store
+        .adjust_user_balance(&user.user_id, &(-cashout_amount.clone()))
+        .await
         .map_err(|e| garden::api::internal_error(&format!("Failed to update balance: {}", e)))?;
 
     // Record cashout transaction
@@ -173,12 +218,22 @@ async fn cashout_funds(
         amount: cashout_amount.clone(),
         game_type: None,
         game_session_id: None,
-        description: Some(format!("Cashout to original wallet: {}", user.original_wallet_addr.as_ref().unwrap_or(&"Unknown".to_string()))),
+        description: Some(format!(
+            "Cashout to original wallet: {}",
+            user.original_wallet_addr
+                .as_ref()
+                .unwrap_or(&"Unknown".to_string())
+        )),
         created_at: None,
     };
 
-    let recorded_transaction = state.store.create_transaction(&transaction).await
-        .map_err(|e| garden::api::internal_error(&format!("Failed to record transaction: {}", e)))?;
+    let recorded_transaction = state
+        .store
+        .create_transaction(&transaction)
+        .await
+        .map_err(|e| {
+            garden::api::internal_error(&format!("Failed to record transaction: {}", e))
+        })?;
 
     Ok(Response::ok(CashoutResponse {
         success: true,
@@ -194,12 +249,20 @@ async fn get_transaction_history(
     State(state): State<Arc<AppState>>,
     Path(address): Path<String>,
 ) -> ApiResult<TransactionHistoryResponse> {
-    let user = state.store.get_user_by_wallet_addr(&address).await
+    let user = state
+        .store
+        .get_user_by_wallet_addr(&address)
+        .await
         .map_err(|e| garden::api::internal_error(&format!("Database error: {}", e)))?
         .ok_or_else(|| garden::api::not_found("Address not found"))?;
 
-    let transactions = state.store.get_user_transactions(&user.user_id, Some(100)).await
-        .map_err(|e| garden::api::internal_error(&format!("Failed to fetch transactions: {}", e)))?;
+    let transactions = state
+        .store
+        .get_user_transactions(&user.user_id, Some(100))
+        .await
+        .map_err(|e| {
+            garden::api::internal_error(&format!("Failed to fetch transactions: {}", e))
+        })?;
 
     let total_count = transactions.len();
 
@@ -207,6 +270,64 @@ async fn get_transaction_history(
         transactions,
         total_count,
     }))
+}
+
+// Get deposit monitor status
+async fn get_monitor_status(
+    State(state): State<Arc<AppState>>,
+) -> ApiResult<MonitorStatusResponse> {
+    // Create a temporary monitor instance to get status
+    let monitor_config = DepositMonitorConfig::default();
+    let monitor = DepositMonitor::new(state.store.clone(), monitor_config);
+    let status = monitor.get_status().await;
+
+    Ok(Response::ok(MonitorStatusResponse { status }))
+}
+
+// Force a deposit for testing (simulation mode only)
+async fn force_deposit(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<ForceDepositRequest>,
+) -> ApiResult<ForceDepositResponse> {
+    let amount = BigDecimal::from_str(&payload.amount)
+        .map_err(|_| garden::api::bad_request("Invalid amount format"))?;
+
+    // Create monitor instance
+    let monitor_config = DepositMonitorConfig::default();
+    let monitor = DepositMonitor::new(state.store.clone(), monitor_config);
+
+    let processed_deposit = monitor
+        .force_simulate_deposit(&payload.user_id, amount)
+        .await
+        .map_err(|e| garden::api::internal_error(&format!("Failed to force deposit: {}", e)))?;
+
+    Ok(Response::ok(ForceDepositResponse {
+        success: true,
+        user_id: processed_deposit.user_id,
+        amount: processed_deposit.amount.to_string(),
+        new_balance: processed_deposit.new_balance.to_string(),
+        transaction_id: processed_deposit.transaction_id,
+    }))
+}
+
+// Trigger manual deposit check
+async fn trigger_deposit_check(State(state): State<Arc<AppState>>) -> ApiResult<serde_json::Value> {
+    let monitor_config = DepositMonitorConfig::default();
+    let monitor = DepositMonitor::new(state.store.clone(), monitor_config);
+
+    let result = monitor
+        .trigger_manual_check()
+        .await
+        .map_err(|e| garden::api::internal_error(&format!("Failed to check deposits: {}", e)))?;
+
+    Ok(Response::ok(serde_json::json!({
+        "processed_deposits": result.processed_deposits.len(),
+        "failed_deposits": result.failed_deposits.len(),
+        "details": {
+            "processed": result.processed_deposits,
+            "failed": result.failed_deposits
+        }
+    })))
 }
 
 async fn health_check() -> &'static str {
@@ -222,7 +343,8 @@ pub async fn router(state: Arc<AppState>) -> Router {
         .route("/deposit/:address", post(simulate_deposit))
         .route("/cashout/:address", post(cashout_funds))
         .route("/transactions/:address", get(get_transaction_history))
+        .route("/monitor/status", get(get_monitor_status))
+        .route("/monitor/force-deposit", post(force_deposit))
+        .route("/monitor/check", post(trigger_deposit_check))
         .with_state(state)
 }
-
-

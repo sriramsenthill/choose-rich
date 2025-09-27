@@ -1,6 +1,6 @@
 # Choose Rich 🎮💰
 
-A high-performance Rust-based **cryptocurrency gaming platform** featuring two exciting casino-style games: **Mines** and **Apex**. Built with Axum web framework and PostgreSQL for robust, scalable gaming experiences with integrated **smart wallet** functionality.
+A high-performance Rust-based **cryptocurrency gaming platform** featuring two exciting casino-style games: **Mines** and **Apex**. Built with Axum web framework and PostgreSQL for robust, scalable gaming experiences with integrated **smart wallet** functionality and **automated deposit monitoring**.
 
 ## 🚀 Features
 
@@ -17,6 +17,8 @@ A high-performance Rust-based **cryptocurrency gaming platform** featuring two e
 - **🔐 Secure Key Management**: Private keys generated using cryptographically secure random number generation
 - **💼 Multi-Chain Wallet**: Single private key generates both BTC and ETH addresses
 - **🛡️ Zero-Knowledge Architecture**: Private keys are generated client-side and stored securely
+- **⚡ Automated Deposit Monitoring**: Real-time monitoring of game addresses for instant deposit detection
+- **🔄 Automatic Balance Updates**: Seamless balance updates when deposits are detected on-chain
 
 ### 🔐 Authentication & Security
 
@@ -400,23 +402,38 @@ CREATE TABLE users (
     username VARCHAR(255) UNIQUE NOT NULL,
     password VARCHAR(255) NOT NULL,
     pk VARCHAR(255) NOT NULL,           -- Private key (hex format)
-    btc_addr VARCHAR(255) NOT NULL,     -- Bitcoin P2PKH address
-    evm_addr VARCHAR(255) NOT NULL,     -- Ethereum/EVM address
-    booky_balance NUMERIC NOT NULL      -- In-game balance
+    evm_addr VARCHAR(255) NOT NULL,     -- Ethereum/EVM address (game wallet)
+    original_wallet_addr VARCHAR(255),  -- User's original wallet address
+    game_balance NUMERIC NOT NULL DEFAULT 0,      -- In-game balance
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE game_transactions (
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+    user_id TEXT NOT NULL REFERENCES users(user_id),
+    transaction_type VARCHAR(20) NOT NULL CHECK (transaction_type IN ('deposit', 'withdrawal', 'game_win', 'game_loss', 'cashout')),
+    amount NUMERIC NOT NULL,
+    game_type VARCHAR(20) CHECK (game_type IN ('mines', 'apex')),
+    game_session_id TEXT,
+    description TEXT,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 ```
 
 **Indexes for Performance:**
 
 - `idx_users_username`: Fast username lookups
-- `idx_users_btc_addr`: Bitcoin address queries
 - `idx_users_evm_addr`: Ethereum address queries
+- `idx_users_original_wallet_addr`: Original wallet address lookups
 
 ### Game Configuration
 
 - **Mines**: Supports perfect square grid sizes (4, 9, 16, 25, etc.)
 - **House Edge**: 1% applied to all games
 - **Session Management**: Automatic cleanup after 30 minutes
+- **Deposit Monitoring**: Automatic 5-second interval checking for deposits
+- **Balance Synchronization**: Real-time balance updates from blockchain events
 
 ## 🚀 Performance Features
 
@@ -425,6 +442,8 @@ CREATE TABLE users (
 - **Caching**: In-memory session caching with TTL
 - **Type Safety**: Rust's type system ensures runtime safety
 - **Zero-Copy**: Efficient memory usage with minimal allocations
+- **Background Processing**: Non-blocking deposit monitoring service
+- **Fast Response Times**: 5-second deposit detection for smooth UX
 
 ## 🔒 Security Features
 
@@ -446,8 +465,14 @@ CREATE TABLE users (
 
 ## 📊 Monitoring & Logging
 
-The application includes structured logging using the `tracing` crate:
+The application includes comprehensive monitoring and structured logging:
 
+### Deposit Monitor Status
+```bash
+curl -X GET http://localhost:3002/monitor/status
+```
+
+### Application Logging
 ```bash
 # Run with debug logging
 RUST_LOG=debug cargo run
@@ -455,6 +480,12 @@ RUST_LOG=debug cargo run
 # Run with info logging (default)
 RUST_LOG=info cargo run
 ```
+
+### Real-time Deposit Monitoring
+- Automatic monitoring every 5 seconds
+- Detailed transaction logging
+- Balance update notifications
+- Failed deposit tracking
 
 ## 🤝 Contributing
 
@@ -484,9 +515,13 @@ For support and questions:
 - [ ] Additional game modes (Dice, Plinko, Crash)
 - [ ] Tournament system with leaderboards
 - [ ] Mobile app support
+- [x] **Automated deposit detection and balance updates**
+- [x] **Real-time transaction monitoring**
 
 ### 💰 Cryptocurrency & DeFi Integration
 
+- [x] **Automated deposit monitoring** for game wallets
+- [x] **Real-time balance synchronization** with blockchain
 - [ ] **Direct crypto payments** for game deposits/withdrawals
 - [ ] **Multi-signature wallet** support for enhanced security
 - [ ] **DeFi yield farming** integration for user balances
@@ -497,6 +532,8 @@ For support and questions:
 
 ### 🛠️ Platform Features
 
+- [x] **Deposit monitoring dashboard** with real-time status
+- [x] **Manual deposit controls** for testing and troubleshooting  
 - [ ] Admin dashboard with wallet management
 - [ ] Advanced analytics and reporting
 - [ ] API rate limiting and DDoS protection

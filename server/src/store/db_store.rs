@@ -1,15 +1,19 @@
-use crate::store::{User, GameTransaction};
-use sqlx::{Pool, Postgres, Result};
+use crate::store::{GameTransaction, User};
 use sqlx::types::BigDecimal;
+use sqlx::{Pool, Postgres, Result};
 
 pub struct Store {
     pool: Pool<Postgres>,
 }
 
 impl Store {
+    /// Get a reference to the database pool
+    pub fn pool(&self) -> &Pool<Postgres> {
+        &self.pool
+    }
+
     /// Run database migration to create the users table. Drops and recreates to ensure correct schema.
     pub async fn migrate(&self) -> Result<()> {
-        
         // Create users table with correct schema
         sqlx::query(
             r#"
@@ -47,7 +51,6 @@ impl Store {
         .execute(&self.pool)
         .await?;
 
-
         //create indexes
         self.create_indexes().await?;
         Ok(())
@@ -77,7 +80,6 @@ impl Store {
         .await
     }
 
-
     // Find user by EVM wallet address
     pub async fn get_user_by_evm_addr(&self, evm_addr: &str) -> Result<Option<User>> {
         sqlx::query_as::<_, User>(
@@ -91,7 +93,10 @@ impl Store {
     }
 
     // Find user by original wallet address (the wallet they connected with)
-    pub async fn get_user_by_original_wallet_addr(&self, original_wallet_addr: &str) -> Result<Option<User>> {
+    pub async fn get_user_by_original_wallet_addr(
+        &self,
+        original_wallet_addr: &str,
+    ) -> Result<Option<User>> {
         sqlx::query_as::<_, User>(
             r#"
             SELECT * FROM users WHERE original_wallet_addr = $1
@@ -107,7 +112,7 @@ impl Store {
         if let Some(user) = self.get_user_by_original_wallet_addr(wallet_addr).await? {
             return Ok(Some(user));
         }
-        
+
         // Then try EVM address
         self.get_user_by_evm_addr(wallet_addr).await
     }
@@ -145,10 +150,14 @@ impl Store {
     }
 
     // Update user's game balance
-    pub async fn update_user_balance(&self, user_id: &str, new_balance: &BigDecimal) -> Result<User> {
+    pub async fn update_user_balance(
+        &self,
+        user_id: &str,
+        new_balance: &BigDecimal,
+    ) -> Result<User> {
         sqlx::query_as::<_, User>(
             r#"
-            UPDATE users 
+            UPDATE users
             SET game_balance = $1, updated_at = CURRENT_TIMESTAMP
             WHERE user_id = $2
             RETURNING *
@@ -164,7 +173,7 @@ impl Store {
     pub async fn adjust_user_balance(&self, user_id: &str, amount: &BigDecimal) -> Result<User> {
         sqlx::query_as::<_, User>(
             r#"
-            UPDATE users 
+            UPDATE users
             SET game_balance = game_balance + $1, updated_at = CURRENT_TIMESTAMP
             WHERE user_id = $2
             RETURNING *
@@ -177,7 +186,10 @@ impl Store {
     }
 
     // Record a game transaction
-    pub async fn create_transaction(&self, transaction: &GameTransaction) -> Result<GameTransaction> {
+    pub async fn create_transaction(
+        &self,
+        transaction: &GameTransaction,
+    ) -> Result<GameTransaction> {
         sqlx::query_as::<_, GameTransaction>(
             r#"
             INSERT INTO game_transactions (user_id, transaction_type, amount, game_type, game_session_id, description)
@@ -196,11 +208,15 @@ impl Store {
     }
 
     // Get transaction history for a user
-    pub async fn get_user_transactions(&self, user_id: &str, limit: Option<i64>) -> Result<Vec<GameTransaction>> {
+    pub async fn get_user_transactions(
+        &self,
+        user_id: &str,
+        limit: Option<i64>,
+    ) -> Result<Vec<GameTransaction>> {
         let limit = limit.unwrap_or(50);
         sqlx::query_as::<_, GameTransaction>(
             r#"
-            SELECT * FROM game_transactions 
+            SELECT * FROM game_transactions
             WHERE user_id = $1
             ORDER BY created_at DESC
             LIMIT $2
@@ -214,22 +230,26 @@ impl Store {
 
     // Process game result (win or loss) and update balance
     pub async fn process_game_result(
-        &self, 
-        user_id: &str, 
-        amount: &BigDecimal, 
-        game_type: &str, 
-        game_session_id: &str, 
-        is_win: bool
+        &self,
+        user_id: &str,
+        amount: &BigDecimal,
+        game_type: &str,
+        game_session_id: &str,
+        is_win: bool,
     ) -> Result<(User, GameTransaction)> {
         let mut tx = self.pool.begin().await?;
-        
+
         let transaction_type = if is_win { "game_win" } else { "game_loss" };
-        let adjustment_amount = if is_win { amount.clone() } else { -amount.clone() };
-        
+        let adjustment_amount = if is_win {
+            amount.clone()
+        } else {
+            -amount.clone()
+        };
+
         // Update user balance
         let updated_user = sqlx::query_as::<_, User>(
             r#"
-            UPDATE users 
+            UPDATE users
             SET game_balance = game_balance + $1, updated_at = CURRENT_TIMESTAMP
             WHERE user_id = $2
             RETURNING *
@@ -267,12 +287,12 @@ impl Store {
         if let Ok(Some(user)) = self.get_user_by_evm_addr(identifier).await {
             return Ok(Some(user.game_balance));
         }
-        
+
         // Try by original wallet address
         if let Ok(Some(user)) = self.get_user_by_original_wallet_addr(identifier).await {
             return Ok(Some(user.game_balance));
         }
-        
+
         Ok(None)
     }
 }

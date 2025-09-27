@@ -121,9 +121,32 @@ curl -X GET http://localhost:5433/transactions/0x742F35Cc6C4C4B6c5B7b8e7e7F8E9F0
   -H "X-Server-secret: X-Server-secret"
 ```
 
-### 8. Cashout to Original Wallet
+### 8. Monitor Deposit Status
 ```bash
-curl -X POST http://localhost:5433/cashout/0x742F35Cc6C4C4B6c5B7b8e7e7F8E9F0A1B2C3D4E \
+curl -X GET http://localhost:3002/monitor/status \
+  -H "X-Server-secret: X-Server-secret"
+```
+
+### 9. Force a Deposit (Testing Only)
+```bash
+curl -X POST http://localhost:3002/monitor/force-deposit \
+  -H "Content-Type: application/json" \
+  -H "X-Server-secret: X-Server-secret" \
+  -d '{
+    "user_id": "123e4567-e89b-12d3-a456-426614174000",
+    "amount": "25.00"
+  }'
+```
+
+### 10. Trigger Manual Deposit Check
+```bash
+curl -X POST http://localhost:3002/monitor/check \
+  -H "X-Server-secret: X-Server-secret"
+```
+
+### 11. Cashout to Original Wallet
+```bash
+curl -X POST http://localhost:3002/cashout/0x742F35Cc6C4C4B6c5B7b8e7e7F8E9F0A1B2C3D4E \
   -H "Content-Type: application/json" \
   -H "X-Server-secret: X-Server-secret" \
   -d '{
@@ -135,7 +158,7 @@ curl -X POST http://localhost:5433/cashout/0x742F35Cc6C4C4B6c5B7b8e7e7F8E9F0A1B2
 
 ```typescript
 class ChooseRichAPI {
-  private baseUrl = 'http://localhost:5433';
+  private baseUrl = 'http://localhost:3002';
   private serverSecret = 'X-Server-secret';
 
   async connectWallet(walletAddress: string) {
@@ -192,6 +215,33 @@ class ChooseRichAPI {
     });
     return response.json();
   }
+
+  async getMonitorStatus() {
+    const response = await fetch(`${this.baseUrl}/monitor/status`, {
+      headers: { 'X-Server-secret': this.serverSecret }
+    });
+    return response.json();
+  }
+
+  async forceDeposit(userId: string, amount: string) {
+    const response = await fetch(`${this.baseUrl}/monitor/force-deposit`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Server-secret': this.serverSecret,
+      },
+      body: JSON.stringify({ user_id: userId, amount })
+    });
+    return response.json();
+  }
+
+  async triggerDepositCheck() {
+    const response = await fetch(`${this.baseUrl}/monitor/check`, {
+      method: 'POST',
+      headers: { 'X-Server-secret': this.serverSecret }
+    });
+    return response.json();
+  }
 }
 
 // Usage
@@ -231,6 +281,33 @@ async function playFullGame() {
 }
 
 playFullGame().catch(console.error);
+
+// Example: Using deposit monitoring
+async function testDepositMonitoring() {
+  const api = new ChooseRichAPI();
+  
+  // Check monitor status
+  const status = await api.getMonitorStatus();
+  console.log('Monitor Status:', status);
+  
+  // Connect wallet first
+  const walletData = await api.connectWallet('0x742F35Cc6C4C4B6c5B7b8e7e7F8E9F0A1B2C3D4E');
+  console.log('Connected wallet:', walletData);
+  
+  // Force a deposit for testing (simulation mode)
+  const forceDeposit = await api.forceDeposit(walletData.user_id, '10.0');
+  console.log('Forced deposit:', forceDeposit);
+  
+  // Check balance after deposit
+  const balance = await api.getBalance('0x742F35Cc6C4C4B6c5B7b8e7e7F8E9F0A1B2C3D4E');
+  console.log('Balance after deposit:', balance);
+  
+  // Trigger manual deposit check
+  const checkResult = await api.triggerDepositCheck();
+  console.log('Manual check result:', checkResult);
+}
+
+testDepositMonitoring().catch(console.error);
 ```
 
 ## Error Handling Examples
@@ -254,8 +331,32 @@ async function safeApiCall() {
 ## Real-World Integration Notes
 
 1. **Authentication**: In production, replace the server secret with proper JWT authentication
-2. **Deposits**: Monitor blockchain events to detect real deposits to game wallets
+2. **Deposits**: The system now includes automatic deposit monitoring that:
+   - Runs every 5 seconds checking all game addresses
+   - Updates user balances when deposits are detected
+   - Records transaction history automatically
+   - Can be configured for real blockchain integration
 3. **Cashouts**: Implement actual on-chain transactions for withdrawals
 4. **Rate Limiting**: Add rate limiting to prevent abuse
 5. **Validation**: Add more robust input validation
-6. **Monitoring**: Add logging and monitoring for all transactions
+6. **Monitoring**: Comprehensive logging and monitoring for all transactions and deposits
+
+## Deposit Monitoring Features
+
+The new deposit monitoring system provides:
+
+- **Automatic Detection**: Constantly monitors all game addresses for new deposits
+- **Balance Updates**: Automatically updates user game balances when deposits are detected
+- **Transaction Recording**: Creates proper transaction records for audit trails
+- **Simulation Mode**: For development/testing with configurable probability
+- **Manual Controls**: Force deposits and trigger checks for testing
+- **Status Monitoring**: Real-time status of the monitoring service
+- **Fast Updates**: 5-second check intervals for responsive user experience
+
+### Configuration Options
+
+- `check_interval_secs`: How often to check for deposits (default: 5 seconds)
+- `enable_simulation`: Enable simulation mode for testing (default: true)
+- `simulation_probability`: Chance of generating random deposits (default: 2%)
+- `required_confirmations`: Blockchain confirmations needed (default: 3)
+- `rpc_url`: Blockchain RPC endpoint for real monitoring
