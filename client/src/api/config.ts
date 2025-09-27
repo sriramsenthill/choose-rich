@@ -22,6 +22,7 @@ export const API_CONFIG = {
 
   BALANCES: {
     BASE: "/user",
+    REFRESH: "/refresh-balance",
   },
   // Request timeout
   TIMEOUT: 10000,

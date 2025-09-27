@@ -29,8 +29,8 @@ export const Navbar = () => {
 
   // Get balances from store
   const { getBalance } = useBalanceStore();
-  // Start polling for balances
-  useBalances(5000); // Poll every 5 seconds
+  // Get balance utilities (no auto-polling)
+  const { refreshBalance, isLoading: isRefreshingBalance } = useBalances(0); // Disable polling
 
   // Send transaction hook
 
@@ -38,6 +38,24 @@ export const Navbar = () => {
 
   const handleDepositeModal = () => {
     setIsModalOpen(!isModalOpen);
+  };
+
+  const handleRefreshBalance = async () => {
+    if (!walletAddress) {
+      console.error("No wallet address available");
+      return;
+    }
+    
+    try {
+      const result = await refreshBalance(walletAddress);
+      if (result.deposits_found > 0) {
+        console.log(`Found ${result.deposits_found} new deposits totaling ${result.total_new_deposit_amount} ETH`);
+        // You could show a toast notification here
+      }
+    } catch (error) {
+      console.error("Failed to refresh balance:", error);
+      // You could show an error toast here
+    }
   };
 
   const handleConnectWallet = () => {
@@ -103,6 +121,20 @@ export const Navbar = () => {
           </div>
           {/* Balance Display */}
           <div className="flex items-center gap-4">
+            {/* Refresh Balance Button */}
+            <button
+              onClick={handleRefreshBalance}
+              disabled={isRefreshingBalance}
+              className="flex items-center gap-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 px-3 py-2 rounded-lg transition-colors"
+              title="Check for new deposits from ARB Sepolia"
+            >
+              <span className="text-xs font-bold text-white">
+                {isRefreshingBalance ? "..." : "🔄"}
+              </span>
+              <span className="text-sm font-semibold text-white">
+                {isRefreshingBalance ? "Checking..." : "Refresh"}
+              </span>
+            </button>
 
             {/* ETH Balance */}
             <div className="flex items-center gap-2 border border-border px-3 py-2 rounded-lg">
