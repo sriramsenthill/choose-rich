@@ -12,7 +12,7 @@ use alloy::{
     transports::http::{Client, Http},
 };
 use rand::Rng;
-use sqlx::types::BigDecimal;
+use sqlx::{types::BigDecimal, Row};
 use std::{
     collections::HashMap,
     str::FromStr,
@@ -168,18 +168,20 @@ impl DepositMonitor {
 
     async fn get_monitored_addresses(&self) -> Result<Vec<MonitoredAddress>, Box<dyn std::error::Error + Send + Sync>> {
         // Query database for all user game addresses
-        let users = sqlx::query!(
-            "SELECT user_id, evm_addr FROM users WHERE evm_addr IS NOT NULL"
-        )
-        .fetch_all(self.store.pool())
-        .await?;
+        let users = sqlx::query("SELECT user_id, evm_addr FROM users WHERE evm_addr IS NOT NULL")
+            .fetch_all(self.store.pool())
+            .await?;
 
         let addresses = users
             .into_iter()
-            .map(|row| MonitoredAddress {
-                user_id: row.user_id,
-                game_address: row.evm_addr,
-                last_checked_block: 0, // Will be tracked separately in real implementation
+            .filter_map(|row| {
+                let user_id: String = row.try_get("user_id").ok()?;
+                let evm_addr: String = row.try_get("evm_addr").ok()?;
+                Some(MonitoredAddress {
+                    user_id,
+                    game_address: evm_addr,
+                    last_checked_block: 0, // Will be tracked separately in real implementation
+                })
             })
             .collect();
 
@@ -201,7 +203,7 @@ impl DepositMonitor {
 
         // For each address, randomly generate deposits based on probability
         for address in addresses {
-            if rng.gen::<f64>() < self.config.simulation_probability {
+            if rng.r#gen::<f64>() < self.config.simulation_probability {
                 // Generate a random deposit amount between 0.001 and 10 ETH (in Wei-like units)
                 let amount_eth = rng.gen_range(0.001..10.0);
                 let amount = BigDecimal::from_str(&amount_eth.to_string())?;
@@ -209,7 +211,7 @@ impl DepositMonitor {
                 // Generate a fake transaction hash
                 let tx_hash = format!(
                     "0x{:064x}",
-                    rng.gen::<u64>() as u128 * rng.gen::<u64>() as u128
+                    rng.r#gen::<u64>() as u128 * rng.r#gen::<u64>() as u128
                 );
 
                 let current_block = {
@@ -225,7 +227,7 @@ impl DepositMonitor {
 
                 if !processed {
                     let deposit = DepositEvent {
-                        from_address: format!("0x{:040x}", rng.gen::<u128>()),
+                        from_address: format!("0x{:040x}", rng.r#gen::<u128>()),
                         to_address: address.game_address.clone(),
                         amount,
                         transaction_hash: tx_hash.clone(),
@@ -361,14 +363,15 @@ impl DepositMonitor {
         info!("Force simulating deposit of {} for user {}", amount, user_id);
 
         // Get user to get their game address
-        let user = sqlx::query!("SELECT * FROM users WHERE user_id = $1", user_id)
+        let user = sqlx::query("SELECT user_id, evm_addr FROM users WHERE user_id = $1")
+            .bind(user_id)
             .fetch_one(self.store.pool())
             .await?;
 
         let mut rng = rand::thread_rng();
         let tx_hash = format!(
             "0x{:064x}",
-            rng.gen::<u64>() as u128 * rng.gen::<u64>() as u128
+            rng.r#gen::<u64>() as u128 * rng.r#gen::<u64>() as u128
         );
 
         let current_block = {
@@ -378,8 +381,8 @@ impl DepositMonitor {
         };
 
         let deposit = DepositEvent {
-            from_address: format!("0x{:040x}", rng.gen::<u128>()),
-            to_address: user.evm_addr,
+            from_address: format!("0x{:040x}", rng.r#gen::<u128>()),
+            to_address: user.try_get("evm_addr")?,
             amount,
             transaction_hash: tx_hash,
             block_number: current_block,

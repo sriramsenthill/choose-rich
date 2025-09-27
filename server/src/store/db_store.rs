@@ -12,12 +12,12 @@ impl Store {
         &self.pool
     }
 
-    /// Run database migration to create the users table. Drops and recreates to ensure correct schema.
+    /// Run database migration to create the users table if it doesn't exist.
     pub async fn migrate(&self) -> Result<()> {
         // Create users table with correct schema
         sqlx::query(
             r#"
-            CREATE TABLE users (
+            CREATE TABLE IF NOT EXISTS users (
                 user_id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
                 username VARCHAR(255) UNIQUE NOT NULL,
                 password VARCHAR(255) NOT NULL,
@@ -36,7 +36,7 @@ impl Store {
         // Create game transactions table for tracking deposits, withdrawals, wins, and losses
         sqlx::query(
             r#"
-            CREATE TABLE game_transactions (
+            CREATE TABLE IF NOT EXISTS game_transactions (
                 id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
                 user_id TEXT NOT NULL REFERENCES users(user_id),
                 transaction_type VARCHAR(20) NOT NULL CHECK (transaction_type IN ('deposit', 'withdrawal', 'game_win', 'game_loss', 'cashout')),

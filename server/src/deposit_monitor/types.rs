@@ -56,7 +56,7 @@ pub struct DepositResult {
     pub failed_deposits: Vec<FailedDeposit>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProcessedDeposit {
     pub user_id: String,
     pub game_address: String,
@@ -66,7 +66,7 @@ pub struct ProcessedDeposit {
     pub transaction_id: String,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FailedDeposit {
     pub user_id: String,
     pub game_address: String,

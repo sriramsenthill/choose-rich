@@ -284,31 +284,7 @@ async fn get_monitor_status(
     Ok(Response::ok(MonitorStatusResponse { status }))
 }
 
-// Force a deposit for testing (simulation mode only)
-async fn force_deposit(
-    State(state): State<Arc<AppState>>,
-    Json(payload): Json<ForceDepositRequest>,
-) -> ApiResult<ForceDepositResponse> {
-    let amount = BigDecimal::from_str(&payload.amount)
-        .map_err(|_| garden::api::bad_request("Invalid amount format"))?;
 
-    // Create monitor instance
-    let monitor_config = DepositMonitorConfig::default();
-    let monitor = DepositMonitor::new(state.store.clone(), monitor_config);
-
-    let processed_deposit = monitor
-        .force_simulate_deposit(&payload.user_id, amount)
-        .await
-        .map_err(|e| garden::api::internal_error(&format!("Failed to force deposit: {}", e)))?;
-
-    Ok(Response::ok(ForceDepositResponse {
-        success: true,
-        user_id: processed_deposit.user_id,
-        amount: processed_deposit.amount.to_string(),
-        new_balance: processed_deposit.new_balance.to_string(),
-        transaction_id: processed_deposit.transaction_id,
-    }))
-}
 
 // Trigger manual deposit check
 async fn trigger_deposit_check(State(state): State<Arc<AppState>>) -> ApiResult<serde_json::Value> {
@@ -344,7 +320,6 @@ pub async fn router(state: Arc<AppState>) -> Router {
         .route("/cashout/:address", post(cashout_funds))
         .route("/transactions/:address", get(get_transaction_history))
         .route("/monitor/status", get(get_monitor_status))
-        .route("/monitor/force-deposit", post(force_deposit))
         .route("/monitor/check", post(trigger_deposit_check))
         .with_state(state)
 }
