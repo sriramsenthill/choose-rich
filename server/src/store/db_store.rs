@@ -9,14 +9,6 @@ pub struct Store {
 impl Store {
     /// Run database migration to create the users table. Drops and recreates to ensure correct schema.
     pub async fn migrate(&self) -> Result<()> {
-        // Drop existing tables to start fresh
-        sqlx::query("DROP TABLE IF EXISTS game_transactions CASCADE;")
-            .execute(&self.pool)
-            .await?;
-        
-        sqlx::query("DROP TABLE IF EXISTS users CASCADE;")
-            .execute(&self.pool)
-            .await?;
         
         // Create users table with correct schema
         sqlx::query(
