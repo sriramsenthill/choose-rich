@@ -1,0 +1,132 @@
+@import url("https://fonts.googleapis.com/css2?family=Audiowide&display=swap");
+@import "tailwindcss";
+
+@font-face {
+  font-family: "Ethnocentric";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./assets/fonts/Ethnocentric.otf") format("opentype");
+}
+
+@theme {
+  --color-background: #10082e;
+  --color-primary: #6a23f6;
+  --color-secondary: #a32bff;
+  --color-borders: #545164;
+  --color-text: #fafafa;
+  --color-text-secondary: #7d798d;
+  --font-ethnocentric: "Ethnocentric", sans-serif;
+  --font-audiowide: "Audiowide", cursive;
+  --gradient-background-primary: linear-gradient(
+    121.78deg,
+    #a581f9 12.09%,
+    #7b3efe 70.36%
+  );
+}
+
+body {
+  color: var(--color-text);
+  background-color: var(--color-background);
+}
+
+.border {
+  border-color: var(--color-borders);
+}
+
+/* Custom animations for button effects */
+@keyframes spin-slow {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes shine {
+  0% {
+    transform: translateX(-150%) skewX(30deg);
+  }
+  100% {
+    transform: translateX(250%) skewX(30deg);
+  }
+}
+
+.animate-spin-slow {
+  animation: spin-slow 3s linear infinite;
+}
+
+.animate-shine {
+  animation: shine 1s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Radial gradient utility */
+.bg-gradient-radial {
+  background: radial-gradient(circle at center, var(--tw-gradient-stops));
+}
+
+/* Primary gradient background utility */
+.bg-gradient-background-primary {
+  background: var(--gradient-background-primary);
+}
+
+.border-grad-primary {
+  border: 2px solid;
+  border-image-source: linear-gradient(
+    205.26deg,
+    rgba(255, 255, 255, 0.1) -6.2%,
+    rgba(255, 255, 255, 0.2) 100%
+  );
+}
+
+.hover\:shine {
+  position: relative;
+  overflow: hidden;
+}
+
+.hover\:shine:before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  width: 168px;
+  background: linear-gradient(
+    to right,
+    transparent,
+    rgba(255, 255, 255, 0.5) 50%,
+    transparent
+  );
+  opacity: 0;
+  transform: translateX(-100%) skewX(30deg);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.hover\:shine:hover:before {
+  opacity: 1;
+  animation: shine 1s cubic-bezier(0.25, 0.8, 0.25, 1) forwards;
+}
+
+/* New class for JavaScript-controlled animation */
+.shine-animating {
+  position: relative;
+  overflow: hidden;
+}
+
+.shine-animating:before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  width: 168px;
+  background: linear-gradient(
+    to right,
+    transparent,
+    rgba(255, 255, 255, 0.7) 50%,
+    transparent
+  );
+  opacity: 0.2;
+  animation: shine 1s cubic-bezier(0.25, 0.8, 0.25, 1) forwards;
+}

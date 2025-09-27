@@ -1,0 +1,320 @@
+{
+  "v": "5.9.0",
+  "fr": 60,
+  "ip": 0,
+  "op": 98,
+  "w": 218,
+  "h": 198,
+  "nm": "bug",
+  "ddd": 0,
+  "assets": [
+    {
+      "id": "image_0",
+      "w": 68,
+      "h": 87,
+      "u": "",
+      "p": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEQAAABXCAMAAACKjxO1AAAAJHpUWHRDcmVhdG9yAAAImXNMyU9KVXBMK0ktUnBNS0tNLikGAEF6Bs5qehXFAAAACXBIWXMAAAABAAAAAQBPJcTWAAAAVFBMVEVHcEz/////////////////////dHT//f3/0tL/uLj/////x8f/lpb/hIT/////9vb/////0tL/29v/////RET/////UFD/p6f/XV3/4OD/8PD/aWmAVsdzAAAAHHRSTlMAIZx9OMX++P78EPr+/t64S9viXv/////////+5jA2yQAAAfVJREFUWMPtl9uSqyAQRUGBBrwlkwAC//+fR9HEyyRVNPN43C/Jg66C7r1bIOTSpUuXLl26dOl/kKaU3R51XVUV5z3UyLenl37uqu06IWIUomudkgYJqY3sxudREQlhRtrnWdZUKAg3XolflICC3Myk8IviMRDNZ4jxZ4issAsxBs5laTCQ4QtEISAUzOftuArjkUXtGdJyTH+Tmtduxla5ZLwuH6LB+6nBbmVY9+634IjetDbGd1HVVqA4IEoiDoFZNW1ozIcMYZ+87gWJKEjv7QfIbBp7z4ZAc4huWCBq/v+T3Zz0/HkpaTLkQ6hxR4uNKvg27TAfws6Q6eXX7x0NseN5PqIh1nkI6oS542pi/eLTwzTAdsd9TLLM98ncTmk2e5RAkmP9CnGFkJQdtSWmCJJSPIYPC0FAWKqmdVKq+CyF6F4+v0jSbEoVxi+QJh9yA/d3COHfloKBPGDvsfmLIfAQPcA2q4XfTggYCGHwTt5qmKVhDUOdtt4bWpMYLB5CBljzuyYRUqkVDqJ56PaQZSVICKH9QnH7kYCFENanlsRUWD+WQWZKl74YXr5OCA0aMlHAHWbsGB74kz3lIPfToDUFkNkv0GwYCbeiawatAKQTdjmqcFIoVnOAIJVz6FvGwXisrqbLDhhOyd+kNWX6ukUW6h9qRVdoJozvQwAAAABJRU5ErkJggg==",
+      "e": 1
+    },
+    {
+      "id": "image_1",
+      "w": 68,
+      "h": 87,
+      "u": "",
+      "p": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEQAAABXCAMAAACKjxO1AAAAJHpUWHRDcmVhdG9yAAAImXNMyU9KVXBMK0ktUnBNS0tNLikGAEF6Bs5qehXFAAAACXBIWXMAAAABAAAAAQBPJcTWAAAATlBMVEVHcEz/////////////////////3Nz/6+v//Pz/////////29v/////////////////RET/////S0v/dnb/WFj/jIz/ZGT/urr/ycn/paXfx4XmAAAAEHRSTlMAYOIJH0H6/vqAr+kyx3eOit1xUAAAAeZJREFUWMPtltmSgyAQRRUV2owmYYf//9EhgJaapIrGx3grr540t9emuXTp0qVLly5d+kEN4yf1OMjImfVaSmNUkJFSWwf81iEh9rmVCD/j+HgKEkGKwYCD+DeGZxz3oJHrI8TzIFQoLZcHhuJR8ymITBBMKC2YA8QkCL+dgQiWQymvuJapj8YGtQiIiH+vndULzmKtTRARv2PZY6EpY9aRvhzy+kxnG1Z/hBCaF+enpZsHcLfL0oiDuAxJBuVgypOcIEtC6DZLbC7tn+EvlnqujV0flTubIE8ZKVbsIICEPJWn7tBFlk9IyAf5aogIY1YskKEOIiyERGtxJpJU/hz0GU8M5Hp5hWLR2dlNtdRErhKiciTwyjYj3RlPOFWxd0ohE92PercOFkQX9/Q47L1PGUbMkzfI+rJyX79DDJTvjK+Q8qL/DlFAypdXz/KAd85vN5CFFgNJqYDNynjlCOYOC8njcZ3ThhLMaZEgyxJfZqzj9wYNkfu945GXX35Obrx0v2m4IW/QeBUsjafT5CdIRoLkxouzyDCUqVGgcqFYFxsvxDE1aIjen59QwWi426w96dCeRpH1KBEBQe5dBSPcoD4RPAV4TE2VemDeWsoA5nHqmko9AAiZH/ehmhBj6fvuFOAn9Q/qP0sX17+j/wAAAABJRU5ErkJggg==",
+      "e": 1
+    },
+    {
+      "id": "image_2",
+      "w": 68,
+      "h": 87,
+      "u": "",
+      "p": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEQAAABXBAMAAABPf/60AAAAJHpUWHRDcmVhdG9yAAAImXNMyU9KVXBMK0ktUnBNS0tNLikGAEF6Bs5qehXFAAAACXBIWXMAAAABAAAAAQBPJcTWAAAAJ1BMVEVHcEz////////////////////////////////+/v7///////////+4S2EbAAAADHRSTlMAwxjgRvBeiaMtbwfbIdlkAAAB0UlEQVRIx+2WO0sDQRCA4xmiMRaCcBi84hTsUvhCCFyRToRUQQThCkXSWYiIhaQQW1Mokl6RYJNCK8HK5LJGw/wo7+ntbmZ2xUrBKY6F/dh53sxkMv+ikYKdnBYpYt+MT7mVPRzJA7uKTi0o40gWoBKdqrBLKLKgGD1nwSVhTL7uhQa32NYj5VLWmfe/hrWucLs+8D+TrKJAnoPb6lAVPMMyH85CbbR0wJcLFfHiBoinsqUBoWzTRM6NEM8mkSeI5ZZElvxbFxgA7VM1eaVMJMC4cxOEmShj3Ad3CbSBMdfJC4E9wIpYlkEQJH5t4PX4siMTUzHAQr9DXCrxQl1UE5CD0dDHLn95DqI1N4BITUAcDBE05TACGJ/wcRQREn6II+ccYuHIMpdBnIBXnbUAvRQZI5B+ikwTyBtSkHTsOnqkQSDv2rB8B+lq8iwi8IsQ5+cIF5emPgEUMtSnsa8vho8UKelrlyrMmRSZIJAjYeShwrcGF0fsjK4yu3xnKOn+EcqlnjSiNY2BKHAbHxB4KVDBq0kzwlG3MVxTV27wo5pWR8aEXHnICF2QEGTJMZq6R2RrjtHxecARxAbDqTLJ1SRmvBPF+rI5C2tzp/bf3mA/AUay34WeGHQDAAAAAElFTkSuQmCC",
+      "e": 1
+    }
+  ],
+  "layers": [
+    {
+      "ddd": 0,
+      "ind": 1,
+      "ty": 2,
+      "nm": "left wing.png",
+      "cl": "png",
+      "parent": 4,
+      "refId": "image_0",
+      "sr": 1,
+      "ks": {
+        "o": { "a": 0, "k": 100, "ix": 11 },
+        "r": {
+          "a": 1,
+          "k": [
+            {
+              "i": { "x": [0.64], "y": [0.527] },
+              "o": { "x": [0.36], "y": [0] },
+              "t": 0,
+              "s": [0]
+            },
+            {
+              "i": { "x": [0.64], "y": [0.808] },
+              "o": { "x": [0.36], "y": [0] },
+              "t": 10,
+              "s": [23]
+            },
+            {
+              "i": { "x": [0.64], "y": [0.575] },
+              "o": { "x": [0.36], "y": [0] },
+              "t": 17,
+              "s": [0]
+            },
+            {
+              "i": { "x": [0.64], "y": [1] },
+              "o": { "x": [0.36], "y": [0] },
+              "t": 26,
+              "s": [23]
+            },
+            {
+              "i": { "x": [0.64], "y": [0.527] },
+              "o": { "x": [0.36], "y": [0] },
+              "t": 32,
+              "s": [0]
+            },
+            {
+              "i": { "x": [0.64], "y": [0.808] },
+              "o": { "x": [0.36], "y": [0] },
+              "t": 42,
+              "s": [23]
+            },
+            { "t": 49, "s": [0] }
+          ],
+          "ix": 10
+        },
+        "p": { "a": 0, "k": [32.613, 45.165, 0], "ix": 2, "l": 2 },
+        "a": { "a": 0, "k": [34, 43.5, 0], "ix": 1, "l": 2 },
+        "s": { "a": 0, "k": [100, 100, 100], "ix": 6, "l": 2 }
+      },
+      "ao": 0,
+      "ip": 0,
+      "op": 98,
+      "st": 0,
+      "bm": 0
+    },
+    {
+      "ddd": 0,
+      "ind": 2,
+      "ty": 2,
+      "nm": "right wing.png",
+      "cl": "png",
+      "parent": 4,
+      "refId": "image_1",
+      "sr": 1,
+      "ks": {
+        "o": { "a": 0, "k": 100, "ix": 11 },
+        "r": {
+          "a": 1,
+          "k": [
+            {
+              "i": { "x": [0.64], "y": [0.527] },
+              "o": { "x": [0.36], "y": [0] },
+              "t": 0,
+              "s": [0]
+            },
+            {
+              "i": { "x": [0.64], "y": [0.808] },
+              "o": { "x": [0.36], "y": [0] },
+              "t": 10,
+              "s": [-23]
+            },
+            {
+              "i": { "x": [0.64], "y": [0.575] },
+              "o": { "x": [0.36], "y": [0] },
+              "t": 17,
+              "s": [0]
+            },
+            {
+              "i": { "x": [0.64], "y": [1] },
+              "o": { "x": [0.36], "y": [0] },
+              "t": 26,
+              "s": [-23]
+            },
+            {
+              "i": { "x": [0.64], "y": [0.527] },
+              "o": { "x": [0.36], "y": [0] },
+              "t": 32,
+              "s": [0]
+            },
+            {
+              "i": { "x": [0.64], "y": [0.808] },
+              "o": { "x": [0.36], "y": [0] },
+              "t": 42,
+              "s": [-23]
+            },
+            { "t": 49, "s": [0] }
+          ],
+          "ix": 10
+        },
+        "p": { "a": 0, "k": [33.445, 45.165, 0], "ix": 2, "l": 2 },
+        "a": { "a": 0, "k": [34, 43.5, 0], "ix": 1, "l": 2 },
+        "s": { "a": 0, "k": [100, 100, 100], "ix": 6, "l": 2 }
+      },
+      "ao": 0,
+      "ip": 0,
+      "op": 98,
+      "st": 0,
+      "bm": 0
+    },
+    {
+      "ddd": 0,
+      "ind": 3,
+      "ty": 4,
+      "nm": "Shape Layer 1",
+      "sr": 1,
+      "ks": {
+        "o": { "a": 0, "k": 100, "ix": 11 },
+        "r": { "a": 0, "k": 0, "ix": 10 },
+        "p": { "a": 0, "k": [118.08, 97.16, 0], "ix": 2, "l": 2 },
+        "a": { "a": 0, "k": [0, 0, 0], "ix": 1, "l": 2 },
+        "s": { "a": 0, "k": [100, 100, 100], "ix": 6, "l": 2 }
+      },
+      "ao": 0,
+      "shapes": [
+        {
+          "ty": "gr",
+          "it": [
+            {
+              "d": 1,
+              "ty": "el",
+              "s": { "a": 0, "k": [54.314, 53.689], "ix": 2 },
+              "p": { "a": 0, "k": [0, 0], "ix": 3 },
+              "nm": "Ellipse Path 1",
+              "mn": "ADBE Vector Shape - Ellipse",
+              "hd": false
+            },
+            {
+              "ty": "fl",
+              "c": { "a": 0, "k": [1, 1, 1, 1], "ix": 4 },
+              "o": { "a": 0, "k": 100, "ix": 5 },
+              "r": 1,
+              "bm": 0,
+              "nm": "Fill 1",
+              "mn": "ADBE Vector Graphic - Fill",
+              "hd": false
+            },
+            {
+              "ty": "tr",
+              "p": { "a": 0, "k": [6.623, -0.094], "ix": 2 },
+              "a": { "a": 0, "k": [0, 0], "ix": 1 },
+              "s": { "a": 0, "k": [100, 159.785], "ix": 3 },
+              "r": { "a": 0, "k": 0, "ix": 6 },
+              "o": { "a": 0, "k": 100, "ix": 7 },
+              "sk": { "a": 0, "k": 0, "ix": 4 },
+              "sa": { "a": 0, "k": 0, "ix": 5 },
+              "nm": "Transform"
+            }
+          ],
+          "nm": "Ellipse 1",
+          "np": 3,
+          "cix": 2,
+          "bm": 0,
+          "ix": 1,
+          "mn": "ADBE Vector Group",
+          "hd": false
+        }
+      ],
+      "ip": 0,
+      "op": 98,
+      "st": 0,
+      "bm": 0
+    },
+    {
+      "ddd": 0,
+      "ind": 4,
+      "ty": 2,
+      "nm": "bug.png",
+      "cl": "png",
+      "refId": "image_2",
+      "sr": 1,
+      "ks": {
+        "o": { "a": 0, "k": 100, "ix": 11 },
+        "r": { "a": 0, "k": 0, "ix": 10 },
+        "p": { "a": 0, "k": [111.961, 79.882, 0], "ix": 2, "l": 2 },
+        "a": { "a": 0, "k": [34, 43.5, 0], "ix": 1, "l": 2 },
+        "s": { "a": 0, "k": [159, 159, 100], "ix": 6, "l": 2 }
+      },
+      "ao": 0,
+      "ef": [
+        {
+          "ty": 5,
+          "nm": "Levels",
+          "np": 11,
+          "mn": "ADBE Easy Levels2",
+          "ix": 1,
+          "en": 1,
+          "ef": [
+            {
+              "ty": 7,
+              "nm": "Channel:",
+              "mn": "ADBE Easy Levels2-0001",
+              "ix": 1,
+              "v": { "a": 0, "k": 1, "ix": 1 }
+            },
+            {},
+            {
+              "ty": 0,
+              "nm": "Input Black",
+              "mn": "ADBE Easy Levels2-0003",
+              "ix": 3,
+              "v": { "a": 0, "k": 1.84, "ix": 3 }
+            },
+            {
+              "ty": 0,
+              "nm": "Input White",
+              "mn": "ADBE Easy Levels2-0004",
+              "ix": 4,
+              "v": { "a": 0, "k": 1, "ix": 4 }
+            },
+            {
+              "ty": 0,
+              "nm": "Gamma",
+              "mn": "ADBE Easy Levels2-0005",
+              "ix": 5,
+              "v": { "a": 0, "k": 1, "ix": 5 }
+            },
+            {
+              "ty": 0,
+              "nm": "Output Black",
+              "mn": "ADBE Easy Levels2-0006",
+              "ix": 6,
+              "v": { "a": 0, "k": 0, "ix": 6 }
+            },
+            {
+              "ty": 0,
+              "nm": "Output White",
+              "mn": "ADBE Easy Levels2-0007",
+              "ix": 7,
+              "v": { "a": 0, "k": 1, "ix": 7 }
+            },
+            {
+              "ty": 7,
+              "nm": "Clip To Output Black",
+              "mn": "ADBE Easy Levels2-0008",
+              "ix": 8,
+              "v": { "a": 0, "k": 3, "ix": 8 }
+            },
+            {
+              "ty": 7,
+              "nm": "Clip To Output White",
+              "mn": "ADBE Easy Levels2-0009",
+              "ix": 9,
+              "v": { "a": 0, "k": 3, "ix": 9 }
+            }
+          ]
+        }
+      ],
+      "ip": 0,
+      "op": 98,
+      "st": 0,
+      "bm": 0
+    }
+  ],
+  "markers": []
+}
