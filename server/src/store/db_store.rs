@@ -7,11 +7,21 @@ pub struct Store {
 }
 
 impl Store {
-    /// Run database migration to create the users table if it does not exist.
+    /// Run database migration to create the users table. Drops and recreates to ensure correct schema.
     pub async fn migrate(&self) -> Result<()> {
+        // Drop existing tables to start fresh
+        sqlx::query("DROP TABLE IF EXISTS game_transactions CASCADE;")
+            .execute(&self.pool)
+            .await?;
+        
+        sqlx::query("DROP TABLE IF EXISTS users CASCADE;")
+            .execute(&self.pool)
+            .await?;
+        
+        // Create users table with correct schema
         sqlx::query(
             r#"
-            CREATE TABLE IF NOT EXISTS users (
+            CREATE TABLE users (
                 user_id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
                 username VARCHAR(255) UNIQUE NOT NULL,
                 password VARCHAR(255) NOT NULL,
@@ -19,8 +29,8 @@ impl Store {
                 evm_addr VARCHAR(255) NOT NULL,
                 original_wallet_addr VARCHAR(255),
                 game_balance NUMERIC NOT NULL DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
             );
             "#,
         )
@@ -30,7 +40,7 @@ impl Store {
         // Create game transactions table for tracking deposits, withdrawals, wins, and losses
         sqlx::query(
             r#"
-            CREATE TABLE IF NOT EXISTS game_transactions (
+            CREATE TABLE game_transactions (
                 id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
                 user_id TEXT NOT NULL REFERENCES users(user_id),
                 transaction_type VARCHAR(20) NOT NULL CHECK (transaction_type IN ('deposit', 'withdrawal', 'game_win', 'game_loss', 'cashout')),
@@ -38,12 +48,13 @@ impl Store {
                 game_type VARCHAR(20) CHECK (game_type IN ('mines', 'apex')),
                 game_session_id TEXT,
                 description TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
             );
             "#,
         )
         .execute(&self.pool)
         .await?;
+
 
         //create indexes
         self.create_indexes().await?;

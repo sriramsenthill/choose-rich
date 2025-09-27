@@ -41,19 +41,24 @@ async fn main() {
     let apex_router = apex::router(Arc::new(app_state.clone()));
     let mines_router = router(Arc::new(app_state.clone())).await;
     let wallet_router = wallet_router(Arc::new(app_state.clone())).await;
-    let app_router = Router::new()
-        .route("/", get(|| async { "Choose Rich API is running!" }))
+    
+    // Apply authentication only to apex and mines routers
+    let protected_router = Router::new()
         .merge(apex_router)
         .merge(mines_router)
-        .merge(wallet_router)
         .layer(AuthLayer {
             expected_secret: "X-Server-secret".to_string(),
             jwt_secret: JWT_SECRET.to_string(),
-        })
+        });
+    
+    let app_router = Router::new()
+        .route("/", get(|| async { "Choose Rich API is running!" }))
+        .merge(protected_router)
+        .merge(wallet_router) // Wallet router without authentication
         .layer(cors);
 
-    // serve this route in 0.0.0.0 : 5433
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:5433").await.unwrap();
-    tracing::info!("server started at 0.0.0.0:5433");
+    // serve this route in 0.0.0.0 : 3002
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:3002").await.unwrap();
+    tracing::info!("server started at 0.0.0.0:3002");
     axum::serve(listener, app_router).await.unwrap();
 }
