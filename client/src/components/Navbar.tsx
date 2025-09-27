@@ -12,7 +12,6 @@ export const Navbar = () => {
   const { walletAddress, isConnected, logout } = usePrivyWallet();
   const [copied, setCopied] = useState(false);
   const [ethCopy, setEthCopy] = useState(false);
-  const [btcCopy, setBtcCopy] = useState(false);
 
   // Privy hooks
   const { ready, authenticated } = usePrivy();
@@ -58,10 +57,7 @@ export const Navbar = () => {
     if (ethCopy) {
       setTimeout(() => setEthCopy(false), 1000);
     }
-    if (btcCopy) {
-      setTimeout(() => setBtcCopy(false), 1000);
-    }
-  }, [copied, setCopied, ethCopy, setEthCopy, btcCopy, setBtcCopy]);
+  }, [copied, setCopied, ethCopy, setEthCopy]);
 
   return (
     <div className="grid grid-cols-[1fr_6fr] bg-background">
@@ -102,46 +98,11 @@ export const Navbar = () => {
                     <FaCopy />
                   </span>
                 </div>
-                <div className="flex flex-col gap-2">
-                  <h2>Deposit BTC</h2>
-                  <p>Deposit your funds to the platform</p>
-                  <span
-                    onClick={() => {
-                      if (walletAddress) {
-                        setBtcCopy(true);
-                        navigator.clipboard.writeText(walletAddress);
-                      }
-                    }}
-                    className="bg-primary/50 p-4 rounded-lg flex gap-2 items-center justify-between"
-                  >
-                    {btcCopy
-                      ? "Copied"
-                      : walletAddress
-                      ? walletAddress.slice(0, 6) +
-                        "..." +
-                        walletAddress.slice(-6)
-                      : "Loading..."}
-                    <FaCopy />
-                  </span>
-                </div>
               </div>
             )}
           </div>
           {/* Balance Display */}
           <div className="flex items-center gap-4">
-            {/* BTC Balance */}
-            <div className="flex items-center gap-2 border border-border px-3 py-2 rounded-lg">
-              <div className="w-4 h-4 bg-yellow-500 rounded-full flex items-center justify-center">
-                <img
-                  src="https://garden.imgix.net/token-images/bitcoin.svg"
-                  alt="BTC"
-                  className="w-3 h-3"
-                />
-              </div>
-              <span className="text-sm font-semibold text-white">
-                ${Number(getBalance("BTC") / 10 ** 8).toFixed(8)}
-              </span>
-            </div>
 
             {/* ETH Balance */}
             <div className="flex items-center gap-2 border border-border px-3 py-2 rounded-lg">
