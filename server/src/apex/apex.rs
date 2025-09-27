@@ -8,7 +8,6 @@ use garden::api::{
     bad_request, internal_error,
     primitives::{ApiResult, Response},
 };
-use rand::Rng;
 use serde::{Deserialize, Serialize};
 use serde_json::to_value;
 use sqlx::types::BigDecimal;
@@ -16,6 +15,39 @@ use std::{sync::Arc, time::Duration};
 use uuid::Uuid;
 
 const SESSION_TTL: Duration = Duration::from_secs(30 * 60);
+const RANDOM_SERVER_URL: &str = "http://localhost:3000";
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct RandomNumberResponse {
+    success: bool,
+    #[serde(rename = "randomNumber")]
+    random_number: u32,
+}
+
+// Function to get random number from random-verifiable-server
+async fn get_random_number() -> eyre::Result<u32> {
+    let client = reqwest::Client::new();
+    let response = client
+        .get(&format!("{}/random", RANDOM_SERVER_URL))
+        .send()
+        .await
+        .map_err(|e| eyre::eyre!("Failed to request random number: {}", e))?;
+    
+    if !response.status().is_success() {
+        return Err(eyre::eyre!("Random server returned error: {}", response.status()));
+    }
+    
+    let random_response: RandomNumberResponse = response
+        .json()
+        .await
+        .map_err(|e| eyre::eyre!("Failed to parse random number response: {}", e))?;
+    
+    if !random_response.success {
+        return Err(eyre::eyre!("Random server indicated failure"));
+    }
+    
+    Ok(random_response.random_number)
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StartGameRequest {
@@ -94,21 +126,20 @@ pub enum SessionStatus {
 }
 
 impl GameSession {
-    pub fn new(amount: u32, option: GameOption) -> Self {
-        let mut rng = rand::thread_rng();
-        let system_number = rng.gen_range(0..=9);
+    pub async fn new(amount: u32, option: GameOption) -> eyre::Result<Self> {
+        let system_number = get_random_number().await?;
         let user_number = match option {
-            GameOption::Blinder => Some(rng.gen_range(0..=9)),
+            GameOption::Blinder => Some(get_random_number().await?),
             GameOption::NonBlinder => None,
         };
-        GameSession {
+        Ok(GameSession {
             id: Uuid::new_v4().to_string(),
             amount,
             option,
             system_number,
             user_number,
             status: SessionStatus::Active,
-        }
+        })
     }
 
     pub fn get_choice_info(&self, choice: &Choice) -> (f64, f64) {
@@ -125,7 +156,7 @@ impl GameSession {
         (true_probability, payout)
     }
 
-    pub fn make_choice(&mut self, choice: Choice) -> eyre::Result<ChooseResponse> {
+    pub async fn make_choice(&mut self, choice: Choice) -> eyre::Result<ChooseResponse> {
         if self.status != SessionStatus::Active {
             return Err(eyre::eyre!("Session is not active"));
         }
@@ -133,8 +164,7 @@ impl GameSession {
             return Err(eyre::eyre!("Cannot make choice in blinder mode"));
         }
         self.status = SessionStatus::Ended;
-        let mut rng = rand::thread_rng();
-        let user_number = rng.gen_range(0..=9);
+        let user_number = get_random_number().await?;
         let (_prob, payout_multiplier) = self.get_choice_info(&choice);
         let won = match choice {
             Choice::High => user_number > self.system_number,
@@ -197,7 +227,8 @@ async fn start_game(
     // Deduct bet amount from user's in-game balance
     let _updated_user = state.store.adjust_in_game_balance(&user.user_id, &(-bet_amount.clone())).await
         .map_err(|e| internal_error(&format!("Failed to deduct in-game balance: {}", e)))?;
-    let mut session = GameSession::new(payload.amount, payload.option.clone());
+    let mut session = GameSession::new(payload.amount, payload.option.clone()).await
+        .map_err(|e| internal_error(&format!("Failed to create game session: {}", e)))?;
     let (
         payout_high,
         prob_high,
@@ -358,7 +389,7 @@ async fn make_choice(
         .ok_or(bad_request("Session not found"))?;
     
     let response = session
-        .make_choice(payload.choice)
+        .make_choice(payload.choice).await
         .map_err(|e| bad_request(&e.to_string()))?;
     
     // Handle winnings
