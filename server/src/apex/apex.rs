@@ -13,9 +13,15 @@ use serde_json::to_value;
 use sqlx::types::BigDecimal;
 use std::{sync::Arc, time::Duration, str::FromStr};
 use uuid::Uuid;
+use once_cell::sync::Lazy;
+use std::env;
 
 const SESSION_TTL: Duration = Duration::from_secs(30 * 60);
-const RANDOM_SERVER_URL: &str = "http://localhost:3000";
+static RANDOM_SERVER_URL: Lazy<String> = Lazy::new(|| {
+    env::var("RANDOM_SERVER_URL")
+        .unwrap_or_else(|_| "http://localhost:3000".to_string())
+});
+
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct RandomNumberResponse {
@@ -28,7 +34,7 @@ struct RandomNumberResponse {
 async fn get_random_number() -> eyre::Result<u32> {
     let client = reqwest::Client::new();
     let response = client
-        .get(&format!("{}/random", RANDOM_SERVER_URL))
+        .get(&format!("{}/random", RANDOM_SERVER_URL.as_str()))
         .send()
         .await
         .map_err(|e| eyre::eyre!("Failed to request random number: {}", e))?;
