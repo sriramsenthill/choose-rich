@@ -371,7 +371,7 @@ export const Apex = () => {
               onClick={gameState.gameOver ? handleNewGame : handleStartGame}
               disabled={
                 betAmount <= 0 ||
-                betAmount > getBalance(selectedToken) ||
+                betAmount > getBalance("ETH") ||
                 isLoading
               }
             >
