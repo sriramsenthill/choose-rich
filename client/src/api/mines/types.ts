@@ -2,10 +2,10 @@ import { SessionStatus } from "../types";
 
 // Mines-specific types based on the Rust backend
 export interface StartGameRequest {
+  game_address: string;
   amount: number;
   blocks: number;
   mines: number;
-  chain: "bitcoin" | "ethereum";
 }
 
 export interface StartGameResponse {
@@ -17,9 +17,9 @@ export interface StartGameResponse {
 }
 
 export interface MoveRequest {
+  game_address: string;
   id: string;
   block: number;
-  chain: "bitcoin" | "ethereum";
 }
 
 export interface MoveAction {
@@ -39,8 +39,8 @@ export interface MoveResponse {
 }
 
 export interface CashoutRequest {
+  game_address: string;
   id: string;
-  chain: "bitcoin" | "ethereum";
 }
 
 export interface CashoutResponse {
@@ -69,5 +69,4 @@ export interface MinesGameState {
   multiplier: number;
   potential_payout: number;
   payoutAmount: number; // Actual amount won/lost from backend
-  chain: "bitcoin" | "ethereum";
 }

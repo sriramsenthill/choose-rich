@@ -10,15 +10,15 @@ import type {
 
 // Mines service that uses the real API
 class MinesService {
-  async startGame(request: StartGameRequest): Promise<StartGameResponse> {
+  async startGame(request: Omit<StartGameRequest, 'game_address'>): Promise<StartGameResponse> {
     return minesApiService.startGame(request);
   }
 
-  async makeMove(request: MoveRequest): Promise<MoveResponse> {
+  async makeMove(request: Omit<MoveRequest, 'game_address'>): Promise<MoveResponse> {
     return minesApiService.makeMove(request);
   }
 
-  async cashout(request: CashoutRequest): Promise<CashoutResponse> {
+  async cashout(request: Omit<CashoutRequest, 'game_address'>): Promise<CashoutResponse> {
     return minesApiService.cashout(request);
   }
 

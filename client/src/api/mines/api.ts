@@ -1,6 +1,6 @@
-import { AUTH_TOKEN } from "../../constants/constants";
 import { apiClient } from "../client";
 import { API_CONFIG } from "../config";
+import { getGameAddress } from "../../utils/utils";
 import type {
   StartGameRequest,
   StartGameResponse,
@@ -13,16 +13,22 @@ import type {
 // Mines API service
 export class MinesApiService {
   private baseEndpoint = API_CONFIG.GAMES.MINES.BASE;
-  private headers = {
-    Authorization: `Bearer ${AUTH_TOKEN}`,
-  };
 
-  async startGame(request: StartGameRequest): Promise<StartGameResponse> {
+  async startGame(request: Omit<StartGameRequest, 'game_address'>): Promise<StartGameResponse> {
     try {
+      const gameAddress = getGameAddress();
+      if (!gameAddress) {
+        throw new Error("Game address not found in localStorage");
+      }
+
+      const fullRequest: StartGameRequest = {
+        ...request,
+        game_address: gameAddress,
+      };
+
       return await apiClient.post<StartGameResponse>(
         API_CONFIG.GAMES.MINES.START,
-        request,
-        this.headers
+        fullRequest
       );
     } catch (error) {
       console.error("Error starting Mines game:", error);
@@ -30,12 +36,21 @@ export class MinesApiService {
     }
   }
 
-  async makeMove(request: MoveRequest): Promise<MoveResponse> {
+  async makeMove(request: Omit<MoveRequest, 'game_address'>): Promise<MoveResponse> {
     try {
+      const gameAddress = getGameAddress();
+      if (!gameAddress) {
+        throw new Error("Game address not found in localStorage");
+      }
+
+      const fullRequest: MoveRequest = {
+        ...request,
+        game_address: gameAddress,
+      };
+
       return await apiClient.post<MoveResponse>(
         API_CONFIG.GAMES.MINES.MOVE,
-        request,
-        this.headers
+        fullRequest
       );
     } catch (error) {
       console.error("Error making move:", error);
@@ -43,12 +58,21 @@ export class MinesApiService {
     }
   }
 
-  async cashout(request: CashoutRequest): Promise<CashoutResponse> {
+  async cashout(request: Omit<CashoutRequest, 'game_address'>): Promise<CashoutResponse> {
     try {
+      const gameAddress = getGameAddress();
+      if (!gameAddress) {
+        throw new Error("Game address not found in localStorage");
+      }
+
+      const fullRequest: CashoutRequest = {
+        ...request,
+        game_address: gameAddress,
+      };
+
       return await apiClient.post<CashoutResponse>(
         API_CONFIG.GAMES.MINES.CASHOUT,
-        request,
-        this.headers
+        fullRequest
       );
     } catch (error) {
       console.error("Error cashing out:", error);
@@ -60,8 +84,7 @@ export class MinesApiService {
   async healthCheck(): Promise<boolean> {
     try {
       const response = await apiClient.get<{ message: string }>(
-        this.baseEndpoint,
-        this.headers
+        this.baseEndpoint
       );
       return response.message === "Mines API is running!";
     } catch (error) {

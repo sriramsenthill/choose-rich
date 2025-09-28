@@ -1,5 +1,5 @@
-import { AUTH_TOKEN } from "../../constants/constants";
 import { apiClient } from "../client";
+import { getGameAddress } from "../../utils/utils";
 import type {
   StartGameRequest,
   StartGameResponse,
@@ -8,19 +8,25 @@ import type {
 } from "./types";
 //TODO: PUT /apex when updated
 const APEX_BASE_URL = "/apex";
-const headers = {
-  Authorization: `Bearer ${AUTH_TOKEN}`,
-};
 
 export const apexApi = {
   /**
    * Start a new Apex game
    */
-  async startGame(request: StartGameRequest): Promise<StartGameResponse> {
+  async startGame(request: Omit<StartGameRequest, 'game_address'>): Promise<StartGameResponse> {
+    const gameAddress = getGameAddress();
+    if (!gameAddress) {
+      throw new Error("Game address not found in localStorage");
+    }
+
+    const fullRequest: StartGameRequest = {
+      ...request,
+      game_address: gameAddress,
+    };
+
     const response = await apiClient.post<StartGameResponse>(
       `${APEX_BASE_URL}/start`,
-      request,
-      headers
+      fullRequest
     );
 
     return response;
@@ -29,11 +35,20 @@ export const apexApi = {
   /**
    * Make a choice in a non-blinder game
    */
-  async makeChoice(request: ChooseRequest): Promise<ChooseResponse> {
+  async makeChoice(request: Omit<ChooseRequest, 'game_address'>): Promise<ChooseResponse> {
+    const gameAddress = getGameAddress();
+    if (!gameAddress) {
+      throw new Error("Game address not found in localStorage");
+    }
+
+    const fullRequest: ChooseRequest = {
+      ...request,
+      game_address: gameAddress,
+    };
+
     const response = await apiClient.post<ChooseResponse>(
       `${APEX_BASE_URL}/choose`,
-      request,
-      headers
+      fullRequest
     );
 
     return response;

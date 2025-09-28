@@ -15,7 +15,6 @@ interface ApexGameState {
   gameId: string | null;
   gameData: StartGameResponse | null;
   payoutAmount: number;
-  chain: "bitcoin" | "ethereum";
 }
 
 export const useApexGame = (onSlotMachineSound?: () => void) => {
@@ -31,7 +30,6 @@ export const useApexGame = (onSlotMachineSound?: () => void) => {
     gameId: null,
     gameData: null,
     payoutAmount: 0,
-    chain: "bitcoin",
   });
 
   const [isLoading, setIsLoading] = useState(false);
@@ -40,8 +38,7 @@ export const useApexGame = (onSlotMachineSound?: () => void) => {
   const startGame = useCallback(
     async (
       amount: number,
-      option: GameOption,
-      chain: "bitcoin" | "ethereum"
+      option: GameOption
     ) => {
       try {
         console.log(
@@ -66,18 +63,15 @@ export const useApexGame = (onSlotMachineSound?: () => void) => {
           gameId: null,
           gameData: null,
           payoutAmount: 0,
-          chain,
         });
 
         console.log("Calling apexApi.startGame with:", {
           amount,
           option,
-          chain,
         });
         const response = await apexApi.startGame({
           amount, // Amount is already converted to API format in the component
           option,
-          chain,
         });
         console.log("Apex API response:", response);
 
@@ -99,7 +93,6 @@ export const useApexGame = (onSlotMachineSound?: () => void) => {
           gameId: response.id,
           gameData: response,
           payoutAmount: 0,
-          chain,
         });
 
         // Set actual values after a short delay to trigger animation
@@ -123,11 +116,7 @@ export const useApexGame = (onSlotMachineSound?: () => void) => {
                 ? response.payout_percentage || 2
                 : 0,
               payoutAmount: response.blinder_suit!.won
-                ? (response.blinder_suit!.payout /
-                    (chain === "bitcoin"
-                      ? Math.pow(10, 8)
-                      : Math.pow(10, 18))) *
-                  (response.payout_percentage || 2)
+                ? response.blinder_suit!.payout
                 : 0,
             }));
           }, 3200); // Animation time
@@ -172,7 +161,6 @@ export const useApexGame = (onSlotMachineSound?: () => void) => {
         const response = await apexApi.makeChoice({
           id: gameState.gameId,
           choice,
-          chain: gameState.chain,
         });
 
         // Play slot machine sound when API response is received
@@ -192,10 +180,7 @@ export const useApexGame = (onSlotMachineSound?: () => void) => {
               ? response.payout / (gameState.gameData?.amount || 1)
               : 0,
             payoutAmount: response.won
-              ? response.payout /
-                (gameState.chain === "bitcoin"
-                  ? Math.pow(10, 8)
-                  : Math.pow(10, 18))
+              ? response.payout
               : 0,
           }));
         }, 100);
@@ -219,7 +204,6 @@ export const useApexGame = (onSlotMachineSound?: () => void) => {
     [
       gameState.gameId,
       gameState.gameData?.amount,
-      gameState.chain,
       onSlotMachineSound,
     ]
   );
@@ -237,7 +221,6 @@ export const useApexGame = (onSlotMachineSound?: () => void) => {
       gameId: null,
       gameData: null,
       payoutAmount: 0,
-      chain: "bitcoin",
     });
     setError(null);
   }, []);

@@ -26,7 +26,7 @@ interface UseMinesGameReturn {
 
   // Actions
   updateBetSettings: (settings: Partial<BetSettings>) => void;
-  startGame: (chain: "bitcoin" | "ethereum", amount: number) => Promise<void>;
+  startGame: (amount: number) => Promise<void>;
   makeMove: (block: number) => Promise<void>;
   cashout: () => Promise<void>;
   resetGame: () => void;
@@ -48,7 +48,6 @@ const initialGameState: MinesGameState = {
   targetWin: 0,
   multiplier: 0,
   payoutAmount: 0,
-  chain: "bitcoin",
   potential_payout: 0,
 };
 
@@ -119,7 +118,7 @@ export const useMinesGame = (): UseMinesGameReturn => {
 
   // Start a new game
   const startGame = useCallback(
-    async (chain: "bitcoin" | "ethereum", amount: number) => {
+    async (amount: number) => {
       if (amount <= 0) {
         setError("Invalid bet amount");
         return;
@@ -129,12 +128,10 @@ export const useMinesGame = (): UseMinesGameReturn => {
       setError(null);
 
       try {
-        const multiplier = chain === "bitcoin" ? 8 : 18;
-        const request: StartGameRequest = {
-          amount: Math.floor(amount * multiplier), // Convert to cents
+        const request: Omit<StartGameRequest, 'game_address'> = {
+          amount,
           blocks: betSettings.gridSize * betSettings.gridSize,
           mines: betSettings.minesCount,
-          chain,
         };
 
         const response = await minesService.startGame(request);
@@ -158,7 +155,6 @@ export const useMinesGame = (): UseMinesGameReturn => {
           gridSize: betSettings.gridSize,
           targetWin: betSettings.targetWin,
           multiplier: betSettings.multiplier,
-          chain,
         }));
 
         // Deduct bet amount from balance
@@ -184,10 +180,9 @@ export const useMinesGame = (): UseMinesGameReturn => {
       setError(null);
 
       try {
-        const request: MoveRequest = {
+        const request: Omit<MoveRequest, 'game_address'> = {
           id: gameState.sessionId,
           block,
-          chain: gameState.chain,
         };
 
         const response = await minesService.makeMove(request);
@@ -212,10 +207,8 @@ export const useMinesGame = (): UseMinesGameReturn => {
               ? response.final_payout > 0
               : false;
 
-            // Set the actual payout amount from backend
-            newState.payoutAmount = response.final_payout
-              ? response.final_payout / 100
-              : 0;
+            // Set the actual payout amount from backend (already in decimal format)
+            newState.payoutAmount = response.final_payout || 0;
 
             if (response.final_payout && response.final_payout > 0) {
               // Balance is managed by backend
@@ -260,7 +253,6 @@ export const useMinesGame = (): UseMinesGameReturn => {
     [
       gameState.sessionId,
       gameState.isPlaying,
-      gameState.chain,
       betSettings.gridSize,
     ]
   );
@@ -276,9 +268,8 @@ export const useMinesGame = (): UseMinesGameReturn => {
     setError(null);
 
     try {
-      const request: CashoutRequest = {
+      const request: Omit<CashoutRequest, 'game_address'> = {
         id: gameState.sessionId,
-        chain: gameState.chain,
       };
 
       const response = await minesService.cashout(request);
@@ -314,7 +305,7 @@ export const useMinesGame = (): UseMinesGameReturn => {
         cashoutTriggered: true,
         gameOver: false,
         gameWon: true,
-        payoutAmount: response.final_payout / 100,
+        payoutAmount: response.final_payout,
       }));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to cashout");

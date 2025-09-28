@@ -7,7 +7,6 @@ import { Reel } from "../components/Reel";
 import { useApexGame } from "../hooks/useApexGame";
 import { GameOption, Choice } from "../api/apex";
 import { Modal } from "../components/UI/StatusModal";
-import { toApiAmount } from "../utils/utils";
 
 const QUICK_BET_AMOUNTS = [0.1, 0.5, 1, 2, 5, 10, 25, 50, 100];
 
@@ -20,7 +19,7 @@ export const Apex = () => {
   // UI state
   const [activeType, setActiveType] = useState<GameOption>(GameOption.Blinder);
   const [betAmount, setBetAmount] = useState(0.1);
-  const selectedToken: "ETH" = "ETH";
+  const selectedToken = "ETH" as const;
 
   // Audio refs
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -73,24 +72,17 @@ export const Apex = () => {
     }
 
     try {
-      // Convert amount to API format (18 decimals for ETH)
-      const apiAmount = toApiAmount(betAmount, 18);
-      console.log(
-        "Starting game with betAmount:",
-        betAmount,
-        "apiAmount:",
-        apiAmount
-      );
+      // Send decimal amount directly (no wei conversion)
+      console.log("Starting game with betAmount:", betAmount);
 
-      // Double check that apiAmount is valid
-      if (apiAmount <= 0) {
-        console.error("Invalid API amount calculated:", apiAmount);
+      // Double check that betAmount is valid
+      if (betAmount <= 0) {
+        console.error("Invalid bet amount:", betAmount);
         return;
       }
 
       // Start game via API (balance managed by backend)
-      // Only Ethereum is supported for now
-      await startGame(apiAmount, activeType, "ethereum");
+      await startGame(betAmount, activeType);
     } catch (err) {
       console.error("Failed to start game:", err);
     }

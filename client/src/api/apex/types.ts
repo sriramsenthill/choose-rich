@@ -1,9 +1,9 @@
 // Apex game API types based on the backend Rust implementation
 
 export interface StartGameRequest {
+  game_address: string;
   amount: number;
   option: GameOption;
-  chain: "bitcoin" | "ethereum";
 }
 
 export const GameOption = {
@@ -36,9 +36,9 @@ export interface BlinderSuit {
 }
 
 export interface ChooseRequest {
+  game_address: string;
   id: string;
   choice: Choice;
-  chain: "bitcoin" | "ethereum";
 }
 
 export const Choice = {

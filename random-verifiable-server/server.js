@@ -235,6 +235,7 @@ app.get('/random', async (req, res) => {
             timestamp: new Date().toISOString()
         });
     } catch (error) {
+        console.log(error.message2)
         res.status(500).json({
             success: false,
             error: 'Failed to generate random number',

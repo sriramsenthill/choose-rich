@@ -7,7 +7,6 @@ import { useBalanceStore } from "../store/balanceStore";
 import { Modal } from "../components/UI/StatusModal";
 import { Bug } from "../components/UI/BugAnimation";
 import { Flower } from "../components/UI/FlowerAnimation";
-import { toApiAmount } from "../utils/utils";
 
 interface MineBoxProps {
   isMine: boolean;
@@ -259,15 +258,15 @@ export const Mines = () => {
     updateBetSettings({ betAmount: amount });
   };
 
-  // Calculate display amount based on chain
+  // Display amount directly (already in decimal format)
   const getDisplayAmount = (amount: number) => {
-    return amount / Math.pow(10, 18);
+    return amount;
   };
 
   // Handle start game with button click sound
   const handleStartGame = () => {
-    const apiAmount = toApiAmount(betSettings.betAmount, 18);
-    startGame("ethereum", apiAmount);
+    // Send decimal amount directly (no wei conversion)
+    startGame(betSettings.betAmount);
   };
 
   // Handle cashout with button click sound
@@ -612,8 +611,7 @@ export const Mines = () => {
                 {isLoading
                   ? "CASHING OUT..."
                   : `CASHOUT $${getDisplayAmount(
-                      gameState.potential_payout,
-                      gameState.chain
+                      gameState.potential_payout
                     ).toFixed(8)}`}
               </Button>
             </div>

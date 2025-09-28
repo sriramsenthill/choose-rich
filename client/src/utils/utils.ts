@@ -15,3 +15,10 @@ export const toApiAmount = (amount: number, decimals: number = 8) => {
   }
   return Math.floor(amount * Math.pow(10, decimals));
 };
+
+export const getGameAddress = (): string | null => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  return window.localStorage.getItem("choose-rich:game-wallet");
+};

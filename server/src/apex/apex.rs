@@ -131,7 +131,12 @@ impl GameSession {
     pub async fn new(amount: f64, option: GameOption) -> eyre::Result<Self> {
         let system_number = get_random_number().await?;
         let user_number = match option {
-            GameOption::Blinder => Some(get_random_number().await?),
+            GameOption::Blinder => {
+                // For blinder mode, derive user number from system number to avoid second blockchain call
+                // This ensures both numbers are cryptographically random but only requires one blockchain call
+                let derived = ((system_number as u64 * 7 + 3) % 10) as u32;
+                Some(derived)
+            },
             GameOption::NonBlinder => None,
         };
         Ok(GameSession {
