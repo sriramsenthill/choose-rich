@@ -30,7 +30,12 @@ impl AppState {
         }
     }
     pub async fn default() -> Self {
-        let pg_default = "postgresql://postgres:postgres@localhost:5432/postgres";
+        
+        // Read database URL and JWT secret from environment variables, with defaults
+        let pg_default = env::var("DATABASE_URL")
+            .unwrap_or_else(|_| "postgresql://postgres:postgres@localhost:5432/postgres".to_string());
+        let jwt_secret = env::var("JWT_SECRET").unwrap_or_else(|_| "JWT_SECRET".to_string());
+
         let pool = sqlx::postgres::PgPoolOptions::new()
             .max_connections(200)
             .connect(pg_default)

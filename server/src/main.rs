@@ -23,7 +23,12 @@ const JWT_SECRET: &str = "JWT_SECRET";
 async fn main() {
     let _ = tracing_subscriber::fmt().try_init();
     let sessions = Arc::new(Cache::builder().build());
-    let pg_default = "postgresql://postgres:postgres@localhost:5432/postgres";
+    
+    // Read database URL and JWT secret from environment variables, with defaults
+    let pg_default = env::var("DATABASE_URL")
+        .unwrap_or_else(|_| "postgresql://postgres:postgres@localhost:5432/postgres".to_string());
+    let jwt_secret = env::var("JWT_SECRET").unwrap_or_else(|_| "JWT_SECRET".to_string());
+
     println!("Attempting to connect to database: {}", pg_default);
 
     let pool = sqlx::postgres::PgPoolOptions::new()
