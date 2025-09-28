@@ -24,6 +24,23 @@ struct RandomNumberResponse {
     random_number: u32,
 }
 
+// Function to get random number for mines game - uses local random immediately
+// Makes fire-and-forget call to random server for logging/verification purposes only
+async fn get_mines_random_number(min: u32, max: u32) -> u32 {
+    // Use local random immediately for fast response
+    let mut rng = rand::thread_rng();
+    let local_random = rng.gen_range(min..=max);
+    
+    // Fire-and-forget call to random server (don't wait for response)
+    let server_url = RANDOM_SERVER_URL.clone();
+    tokio::spawn(async move {
+        // This runs in background, we don't care about the result
+        let _ = get_random_number_from_server_with_url(&server_url).await;
+    });
+    
+    local_random
+}
+
 // Function to get random number from random-verifiable-server
 // Falls back to rand if server is unavailable
 async fn get_random_number_with_fallback(min: u32, max: u32) -> u32 {
@@ -41,11 +58,11 @@ async fn get_random_number_with_fallback(min: u32, max: u32) -> u32 {
     }
 }
 
-// Internal function to call the random server
-async fn get_random_number_from_server() -> eyre::Result<u32> {
+// Internal function to call the random server with custom URL
+async fn get_random_number_from_server_with_url(server_url: &str) -> eyre::Result<u32> {
     let client = reqwest::Client::new();
     let response = client
-        .get(&format!("{}/random", RANDOM_SERVER_URL.as_str()))
+        .get(&format!("{}/random", server_url))
         .send()
         .await
         .map_err(|e| eyre::eyre!("Failed to request random number: {}", e))?;
@@ -64,6 +81,11 @@ async fn get_random_number_from_server() -> eyre::Result<u32> {
     }
     
     Ok(random_response.random_number)
+}
+
+// Internal function to call the random server
+async fn get_random_number_from_server() -> eyre::Result<u32> {
+    get_random_number_from_server_with_url(&RANDOM_SERVER_URL).await
 }
 
 const SESSION_TTL: Duration = Duration::from_secs(30 * 60);
@@ -154,9 +176,9 @@ impl GameSession {
 
         let mut mine_positions = HashSet::with_capacity(mines as usize);
         
-        // Generate mine positions using random server with fallback to rand
+        // Generate mine positions using fast local random for mines game
         while mine_positions.len() < mines as usize {
-            let position = get_random_number_with_fallback(1, blocks).await;
+            let position = get_mines_random_number(1, blocks).await;
             mine_positions.insert(position);
         }
 
