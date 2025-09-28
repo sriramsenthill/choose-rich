@@ -224,7 +224,6 @@ export const Mines = () => {
   const navigate = useNavigate();
   const { getBalance } = useBalanceStore();
   const [selectedBlocks, setSelectedBlocks] = useState<Set<number>>(new Set());
-  const selectedToken: "ETH" = "ETH";
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const mineOpenAudioRef = useRef<HTMLAudioElement | null>(null);
   const bugsSoundAudioRef = useRef<HTMLAudioElement | null>(null);

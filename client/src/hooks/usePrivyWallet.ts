@@ -1,7 +1,6 @@
 import { usePrivy, useWallets } from "@privy-io/react-auth";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { walletService } from "../api";
-import type { ConnectWalletResponse } from "../api/wallet/types";
 
 const GAME_WALLET_STORAGE_KEY = "choose-rich:game-wallet";
 
