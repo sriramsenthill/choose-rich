@@ -116,7 +116,7 @@ RUN printf 'server {\n\
     location ~* \\.(?:ico|css|js|gif|jpe?g|png|woff2?|eot|ttf|svg|otf|wasm)$ {\n\
         expires 1m;\n\
         access_log off;\n\
-        add_header Cache-Control \"public, immutable\";\n\
+        add_header Cache-Control \"public\";\n\
     }\n\
     \n\
     # Security headers\n\
