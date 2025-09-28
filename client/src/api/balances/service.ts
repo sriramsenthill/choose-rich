@@ -46,7 +46,7 @@ export class BalancesService {
   async getWalletBalance(gameAddress: string): Promise<WalletBalanceResponse> {
     try {
       const response = await walletApiClient.get<WalletBalanceResponse>(
-        `${API_CONFIG.WALLET.BALANCE}/${gameAddress}`
+        `${API_CONFIG.BALANCE}/${gameAddress}`
       );
       return response;
     } catch (error) {
