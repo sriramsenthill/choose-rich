@@ -371,7 +371,7 @@ export const Apex = () => {
               onClick={gameState.gameOver ? handleNewGame : handleStartGame}
               disabled={
                 betAmount <= 0 ||
-                betAmount > getBalance("ETH") ||
+                betAmount > (getBalance("ETH") / Math.pow(10, 18)) ||
                 isLoading
               }
             >

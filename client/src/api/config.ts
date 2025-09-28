@@ -1,11 +1,11 @@
 // API configuration
 export const API_CONFIG = {
   // Base URL from environment or fallback to provided API
-  BASE_URL: import.meta.env.VITE_API_BASE_URL || "http://172.31.8.71:3002",
+  BASE_URL: import.meta.env.VITE_API_BASE_URL,
 
   WALLET: {
     BASE_URL:
-      import.meta.env.VITE_WALLET_API_BASE_URL || "http://10.42.0.159:3002",
+      import.meta.env.VITE_WALLET_API_BASE_URL,
     CONNECT: "/wallet/connect",
   },
   // Game-specific endpoints

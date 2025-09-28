@@ -18,15 +18,19 @@ export const useBalances = (pollInterval: number = 7000) => {
         ? parseFloat(walletBalance.in_game_balance)
         : 0;
 
+      // Convert ETH to wei for storage (multiply by 10^18)
+      // This ensures consistency with the display logic that divides by 10^18
+      const balanceInWei = inGameBalanceNumber * Math.pow(10, 18);
+
       const transformedBalances = {
         ETH: {
-          balance: inGameBalanceNumber,
+          balance: balanceInWei,
           symbol: "ETH",
         },
       };
 
       setBalances(transformedBalances);
-      console.log("Balance state updated:", transformedBalances);
+      console.log("Balance state updated:", transformedBalances, "Original ETH:", inGameBalanceNumber);
     },
     [setBalances]
   );
@@ -93,6 +97,7 @@ export const useBalances = (pollInterval: number = 7000) => {
         const refreshResponse = await balancesService.refreshBalance(request);
         console.log("Refresh balance response:", refreshResponse);
 
+        // Update balance store directly with the refresh response
         updateBalancesFromWallet({
           account_balance: refreshResponse.account_balance,
           in_game_balance: refreshResponse.in_game_balance,

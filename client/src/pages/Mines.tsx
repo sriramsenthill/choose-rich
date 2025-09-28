@@ -586,7 +586,7 @@ export const Mines = () => {
               onClick={handleStartGame}
               disabled={
                 betSettings.betAmount <= 0 ||
-                betSettings.betAmount > getBalance("ETH") ||
+                betSettings.betAmount > (getBalance("ETH") / Math.pow(10, 18)) ||
                 isLoading
               }
             >
