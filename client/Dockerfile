@@ -116,13 +116,14 @@ RUN printf 'server {\n\
     location ~* \\.(?:ico|css|js|gif|jpe?g|png|woff2?|eot|ttf|svg|otf|wasm)$ {\n\
         expires 1m;\n\
         access_log off;\n\
-        add_header Cache-Control \"public\";\n\
+        add_header Cache-Control "public, immutable";\n\
     }\n\
     \n\
     # Security headers\n\
-    add_header X-Content-Type-Options \"nosniff\" always;\n\
-    add_header Content-Security-Policy \"frame-ancestors *;\" always;\n\
+    add_header X-Content-Type-Options "nosniff" always;\n\
+    add_header Content-Security-Policy "frame-ancestors *;" always;\n\
     }\n' > /etc/nginx/conf.d/default.conf
+
 
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]
