@@ -1268,6 +1268,7 @@ dependencies = [
  "hex",
  "jsonwebtoken",
  "moka",
+ "once_cell",
  "rand 0.8.5",
  "reqwest",
  "secp256k1 0.29.1",

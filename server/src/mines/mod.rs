@@ -1,5 +1,6 @@
 mod router;
 use rand::Rng;
+use std::env;
 pub use router::router;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -8,7 +9,13 @@ use std::{
 };
 use uuid::Uuid;
 
-const RANDOM_SERVER_URL: &str = "http://localhost:3000";
+use once_cell::sync::Lazy;
+
+static RANDOM_SERVER_URL: Lazy<String> = Lazy::new(|| {
+    env::var("RANDOM_SERVER_URL")
+        .unwrap_or_else(|_| "http://localhost:3000".to_string())
+});
+
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct RandomNumberResponse {
@@ -38,7 +45,7 @@ async fn get_random_number_with_fallback(min: u32, max: u32) -> u32 {
 async fn get_random_number_from_server() -> eyre::Result<u32> {
     let client = reqwest::Client::new();
     let response = client
-        .get(&format!("{}/random", RANDOM_SERVER_URL))
+        .get(&format!("{}/random", RANDOM_SERVER_URL.as_str()))
         .send()
         .await
         .map_err(|e| eyre::eyre!("Failed to request random number: {}", e))?;
