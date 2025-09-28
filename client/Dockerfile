@@ -1,19 +1,19 @@
 # syntax=docker/dockerfile:1
-FROM node:22-alpine AS builder
+FROM node:22-slim AS builder
 
 WORKDIR /app
 
-# Install ALL build dependencies for native modules (cached layer)
-RUN apk add --no-cache \
+# Install build dependencies for native modules (cached layer)
+RUN apt-get update && apt-get install -y \
     make \
     g++ \
     python3 \
-    py3-pip \
-    libusb-dev \
-    libudev-zero-dev \
-    linux-headers \
-    pkgconfig \
-    git
+    python3-pip \
+    git \
+    pkg-config \
+    libusb-1.0-0-dev \
+    libudev-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 # Set environment variables for native builds
 ENV PYTHON=/usr/bin/python3
@@ -116,14 +116,13 @@ RUN printf 'server {\n\
     location ~* \\.(?:ico|css|js|gif|jpe?g|png|woff2?|eot|ttf|svg|otf|wasm)$ {\n\
         expires 1m;\n\
         access_log off;\n\
-        add_header Cache-Control "public, immutable";\n\
+        add_header Cache-Control \"public, immutable\";\n\
     }\n\
     \n\
     # Security headers\n\
-    add_header X-Content-Type-Options "nosniff" always;\n\
-    add_header Content-Security-Policy "frame-ancestors *;" always;\n\
+    add_header X-Content-Type-Options \"nosniff\" always;\n\
+    add_header Content-Security-Policy \"frame-ancestors *;\" always;\n\
     }\n' > /etc/nginx/conf.d/default.conf
-
 
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]
