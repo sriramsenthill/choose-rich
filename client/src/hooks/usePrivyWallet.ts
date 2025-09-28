@@ -1,5 +1,9 @@
 import { usePrivy, useWallets } from "@privy-io/react-auth";
-import { useCallback } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { walletService } from "../api";
+import type { ConnectWalletResponse } from "../api/wallet/types";
+
+const GAME_WALLET_STORAGE_KEY = "choose-rich:game-wallet";
 
 export const usePrivyWallet = () => {
   const {
@@ -14,9 +18,54 @@ export const usePrivyWallet = () => {
   const { wallets } = useWallets();
   const wallet = wallets[0];
 
+  const [gameWalletAddress, setGameWalletAddress] = useState<string | null>(
+    () => {
+      if (typeof window === "undefined") {
+        return null;
+      }
+      return window.localStorage.getItem(GAME_WALLET_STORAGE_KEY);
+    }
+  );
+
   // Get the embedded wallet (Privy's default wallet)
-  const embeddedWallet = wallets.find(
-    (wallet: any) => wallet.walletClientType === "privy"
+  const embeddedWallet = useMemo(
+    () => wallets.find((item: any) => item.walletClientType === "privy"),
+    [wallets]
+  );
+
+  const walletAddress = useMemo(() => {
+    if (embeddedWallet?.address) return embeddedWallet.address;
+    const connectedWallet = wallets.find((item: any) => item.address);
+    return connectedWallet?.address ?? "";
+  }, [embeddedWallet, wallets]);
+
+  const registerGameWallet = useCallback(
+    async (address: string = walletAddress) => {
+      if (!address) {
+        console.warn(
+          "No wallet address available for game wallet registration"
+        );
+        return null;
+      }
+
+      try {
+        const response = await walletService.connectWallet({
+          wallet_address: address,
+        });
+        if (typeof window !== "undefined") {
+          window.localStorage.setItem(
+            GAME_WALLET_STORAGE_KEY,
+            response.game_evm_address
+          );
+        }
+        setGameWalletAddress(response.game_evm_address);
+        return response;
+      } catch (error) {
+        console.error("Failed to register game wallet:", error);
+        throw error;
+      }
+    },
+    [walletAddress]
   );
 
   // Handle Privy login
@@ -25,28 +74,36 @@ export const usePrivyWallet = () => {
 
     try {
       await login();
+      await registerGameWallet();
     } catch (error) {
       console.error("Failed to login with Privy:", error);
     }
-  }, [ready, login]);
+  }, [ready, login, registerGameWallet]);
 
   // Handle Privy logout
   const handleLogout = useCallback(async () => {
     try {
       await logout();
+      if (typeof window !== "undefined") {
+        window.localStorage.removeItem(GAME_WALLET_STORAGE_KEY);
+      }
+      setGameWalletAddress(null);
     } catch (error) {
       console.error("Failed to logout from Privy:", error);
     }
   }, [logout]);
 
-  // Get wallet address - prioritize embedded wallet, fallback to connected wallet
-  const getWalletAddress = useCallback(() => {
-    if (embeddedWallet?.address) return embeddedWallet.address;
-    // Check for any connected wallet address
-    const connectedWallet = wallets.find((wallet: any) => wallet.address);
-    if (connectedWallet?.address) return connectedWallet.address;
-    return "";
-  }, [embeddedWallet, wallets]);
+  useEffect(() => {
+    if (!authenticated || !walletAddress || gameWalletAddress) {
+      return;
+    }
+
+    registerGameWallet(walletAddress).catch((error) => {
+      console.error("Failed to register game wallet on mount:", error);
+    });
+  }, [authenticated, walletAddress, gameWalletAddress, registerGameWallet]);
+
+  const getWalletAddress = useCallback(() => walletAddress, [walletAddress]);
 
   // Check if user has a wallet
   const hasWallet = useCallback(() => {
@@ -105,11 +162,12 @@ export const usePrivyWallet = () => {
     embeddedWallet,
 
     // Wallet info
-    walletAddress: getWalletAddress(),
+    walletAddress,
     isConnected: authenticated || !!embeddedWallet,
     hasWallet: hasWallet(),
     walletClient: getWalletForSigning(),
     currentChainId: getCurrentChainId(),
+    gameWalletAddress,
 
     // Transaction methods
     sendTransaction,
@@ -121,6 +179,7 @@ export const usePrivyWallet = () => {
     login: handleLogin,
     logout: handleLogout,
     switchToChain84532,
+    registerGameWallet,
 
     // Utility functions
     getWalletAddress,

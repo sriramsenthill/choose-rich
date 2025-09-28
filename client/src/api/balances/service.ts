@@ -1,7 +1,14 @@
 import { AUTH_TOKEN } from "../../constants/constants";
-import { apiClient } from "../client";
 import { API_CONFIG } from "../config";
-import type { BalanceData, RefreshBalanceRequest, RefreshBalanceResponse } from "./types";
+import { apiClient, ApiClient } from "../client";
+import type {
+  BalanceData,
+  RefreshBalanceRequest,
+  RefreshBalanceResponse,
+  WalletBalanceResponse,
+} from "./types";
+
+const walletApiClient = new ApiClient(API_CONFIG.WALLET.BASE_URL);
 export class BalancesService {
   async getBalances(): Promise<BalanceData> {
     try {
@@ -34,6 +41,29 @@ export class BalancesService {
       console.error("Failed to refresh balance:", error);
       throw error;
     }
+  }
+
+  async getWalletBalance(gameAddress: string): Promise<WalletBalanceResponse> {
+    try {
+      const response = await walletApiClient.get<WalletBalanceResponse>(
+        `${API_CONFIG.WALLET.BALANCE}/${gameAddress}`
+      );
+      return response;
+    } catch (error) {
+      console.error("Failed to fetch wallet balance:", error);
+      throw error;
+    }
+  }
+
+  async getStoredGameWalletBalance(): Promise<WalletBalanceResponse | null> {
+    if (typeof window === "undefined") {
+      return null;
+    }
+    const gameAddress = window.localStorage.getItem("choose-rich:game-wallet");
+    if (!gameAddress) {
+      return null;
+    }
+    return this.getWalletBalance(gameAddress);
   }
 }
 

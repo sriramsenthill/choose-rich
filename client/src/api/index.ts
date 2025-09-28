@@ -12,6 +12,7 @@ export {
 } from "./types";
 
 export * from "./mines";
+export * from "./wallet";
 
 export {
   apexApi,

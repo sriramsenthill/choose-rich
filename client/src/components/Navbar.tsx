@@ -9,7 +9,8 @@ import { usePrivyWallet } from "../hooks/usePrivyWallet";
 
 export const Navbar = () => {
   const navigate = useNavigate();
-  const { walletAddress, isConnected, logout } = usePrivyWallet();
+  const { walletAddress, isConnected, logout, gameWalletAddress } =
+    usePrivyWallet();
   const [copied, setCopied] = useState(false);
   const [ethCopy, setEthCopy] = useState(false);
 
@@ -30,7 +31,7 @@ export const Navbar = () => {
   // Get balances from store
   const { getBalance } = useBalanceStore();
   // Get balance utilities (no auto-polling)
-  const { refreshBalance, isLoading: isRefreshingBalance } = useBalances(0); // Disable polling
+  const { refreshBalance, isLoading: isRefreshingBalance } = useBalances(-1);
 
   // Send transaction hook
 
@@ -99,19 +100,19 @@ export const Navbar = () => {
                   <p>Deposit your funds to the platform</p>
                   <span
                     onClick={() => {
-                      if (walletAddress) {
+                      if (gameWalletAddress) {
                         setEthCopy(true);
-                        navigator.clipboard.writeText(walletAddress);
+                        navigator.clipboard.writeText(gameWalletAddress);
                       }
                     }}
                     className="bg-primary/50 p-4 flex gap-2 items-center justify-between rounded-lg"
                   >
                     {ethCopy
                       ? "Copied"
-                      : walletAddress
-                      ? walletAddress.slice(0, 6) +
+                      : gameWalletAddress
+                      ? gameWalletAddress.slice(0, 6) +
                         "..." +
-                        walletAddress.slice(-6)
+                        gameWalletAddress.slice(-6)
                       : "Loading..."}
                     <FaCopy />
                   </span>

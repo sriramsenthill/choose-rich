@@ -7,20 +7,18 @@ interface TokenBalance {
 
 interface BalanceState {
   balances: {
-    BTC: TokenBalance;
     ETH: TokenBalance;
   };
   isLoading: boolean;
   error: string | null;
-  setBalances: (balances: { BTC: TokenBalance; ETH: TokenBalance }) => void;
+  setBalances: (balances: { ETH: TokenBalance }) => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
-  getBalance: (token: "BTC" | "ETH") => number;
+  getBalance: (token: "ETH") => number;
 }
 
 export const useBalanceStore = create<BalanceState>((set, get) => ({
   balances: {
-    BTC: { balance: 0, symbol: "BTC" },
     ETH: { balance: 0, symbol: "ETH" },
   },
   isLoading: false,

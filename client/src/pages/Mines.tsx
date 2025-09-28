@@ -225,7 +225,7 @@ export const Mines = () => {
   const navigate = useNavigate();
   const { getBalance } = useBalanceStore();
   const [selectedBlocks, setSelectedBlocks] = useState<Set<number>>(new Set());
-  const [selectedToken, setSelectedToken] = useState<"ETH" | "BTC">("BTC");
+  const selectedToken: "ETH" = "ETH";
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const mineOpenAudioRef = useRef<HTMLAudioElement | null>(null);
   const bugsSoundAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -259,24 +259,15 @@ export const Mines = () => {
     updateBetSettings({ betAmount: amount });
   };
 
-  const handleTokenChange = (token: "ETH" | "BTC") => {
-    setSelectedToken(token);
-  };
-
   // Calculate display amount based on chain
-  const getDisplayAmount = (amount: number, chain: "bitcoin" | "ethereum") => {
-    const decimals = chain === "bitcoin" ? 8 : 18;
-    return amount / Math.pow(10, decimals);
+  const getDisplayAmount = (amount: number) => {
+    return amount / Math.pow(10, 18);
   };
 
   // Handle start game with button click sound
   const handleStartGame = () => {
-    const chain = selectedToken === "BTC" ? "bitcoin" : "ethereum";
-    const apiAmount = toApiAmount(
-      betSettings.betAmount,
-      selectedToken === "BTC" ? 8 : 18
-    ); // 8 decimals for both BTC and ETH
-    startGame(chain, apiAmount);
+    const apiAmount = toApiAmount(betSettings.betAmount, 18);
+    startGame("ethereum", apiAmount);
   };
 
   // Handle cashout with button click sound
@@ -476,24 +467,9 @@ export const Mines = () => {
               Token
             </label>
             <div className="flex items-center justify-between gap-2 bg-primary/20 p-1 rounded-lg">
-              <button
-                className={`px-3 py-2 rounded-lg w-full cursor-pointer transition-colors text-sm ${
-                  selectedToken === "BTC" ? "bg-primary" : "hover:bg-white/10"
-                }`}
-                onClick={() => handleTokenChange("BTC")}
-                disabled={gameState.isPlaying}
-              >
-                BTC
-              </button>
-              <button
-                className={`px-3 py-2 rounded-lg w-full cursor-pointer transition-colors text-sm ${
-                  selectedToken === "ETH" ? "bg-primary" : "hover:bg-white/10"
-                }`}
-                onClick={() => handleTokenChange("ETH")}
-                disabled={gameState.isPlaying}
-              >
+              <span className="px-3 py-2 rounded-lg w-full text-center text-sm bg-primary">
                 ETH
-              </button>
+              </span>
             </div>
           </div>
 
@@ -519,12 +495,8 @@ export const Mines = () => {
               </div>
 
               <img
-                src={
-                  selectedToken === "BTC"
-                    ? "https://garden.imgix.net/token-images/bitcoin.svg"
-                    : "https://garden.imgix.net/token-images/ethereum.svg"
-                }
-                alt={selectedToken}
+                src="https://garden.imgix.net/token-images/ethereum.svg"
+                alt="ETH"
                 className="w-6 h-6"
               />
             </div>
@@ -614,7 +586,7 @@ export const Mines = () => {
               onClick={handleStartGame}
               disabled={
                 betSettings.betAmount <= 0 ||
-                betSettings.betAmount > getBalance(selectedToken) ||
+                betSettings.betAmount > getBalance("ETH") ||
                 isLoading
               }
             >

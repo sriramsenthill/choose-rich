@@ -25,3 +25,10 @@ export interface RefreshBalanceResponse {
   deposits_found: number;
   total_new_deposit_amount: string;
 }
+
+export interface WalletBalanceResponse {
+  account_balance: string;
+  in_game_balance: string;
+  user_id: string;
+  game_address: string;
+}

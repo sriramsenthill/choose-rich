@@ -1,35 +1,42 @@
 import { useEffect, useRef, useCallback } from "react";
 import { useBalanceStore } from "../store/balanceStore";
 import { balancesService } from "../api/balances";
-import type { RefreshBalanceRequest } from "../api/balances/types";
+import type {
+  RefreshBalanceRequest,
+  WalletBalanceResponse,
+} from "../api/balances/types";
 
-export const useBalances = (pollInterval: number = 5000) => {
+export const useBalances = (pollInterval: number = 7000) => {
   const { setBalances, setLoading, setError, isLoading, error } =
     useBalanceStore();
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const fetchBalances = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const balanceData = await balancesService.getBalances();
-      console.log("Fetched balance data:", balanceData);
+  const updateBalancesFromWallet = useCallback(
+    (walletBalance: WalletBalanceResponse | null) => {
+      const inGameBalanceNumber = walletBalance
+        ? parseFloat(walletBalance.in_game_balance)
+        : 0;
 
-      // Transform API response to store format
       const transformedBalances = {
-        BTC: {
-          balance: balanceData.bitcoin.balance,
-          symbol: "BTC",
-        },
         ETH: {
-          balance: balanceData.ethereum.balance,
+          balance: inGameBalanceNumber,
           symbol: "ETH",
         },
       };
 
       setBalances(transformedBalances);
-      console.log("Balance state updated successfully");
+      console.log("Balance state updated:", transformedBalances);
+    },
+    [setBalances]
+  );
+
+  const fetchBalances = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const walletBalance = await balancesService.getStoredGameWalletBalance();
+      updateBalancesFromWallet(walletBalance);
     } catch (err) {
       const errorMessage =
         err instanceof Error ? err.message : "Failed to fetch balances";
@@ -38,9 +45,13 @@ export const useBalances = (pollInterval: number = 5000) => {
     } finally {
       setLoading(false);
     }
-  }, [setBalances, setLoading, setError]);
+  }, [setLoading, setError, updateBalancesFromWallet]);
 
   const startPolling = useCallback(() => {
+    if (pollInterval <= 0) {
+      return;
+    }
+
     // Fetch immediately
     fetchBalances();
 
@@ -56,6 +67,11 @@ export const useBalances = (pollInterval: number = 5000) => {
   }, []);
 
   useEffect(() => {
+    if (pollInterval <= 0) {
+      stopPolling();
+      return;
+    }
+
     startPolling();
 
     // Cleanup on unmount
@@ -64,46 +80,39 @@ export const useBalances = (pollInterval: number = 5000) => {
     };
   }, [pollInterval, startPolling, stopPolling]);
 
-  const refreshBalance = useCallback(async (walletAddress: string) => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      const request: RefreshBalanceRequest = {
-        wallet_address: walletAddress,
-      };
-      
-      const refreshResponse = await balancesService.refreshBalance(request);
-      console.log("Refresh balance response:", refreshResponse);
+  const refreshBalance = useCallback(
+    async (walletAddress: string) => {
+      try {
+        setLoading(true);
+        setError(null);
 
-      // Transform API response to store format - use in_game_balance for display
-      const inGameBalanceNumber = parseFloat(refreshResponse.in_game_balance);
-      
-      const transformedBalances = {
-        BTC: {
-          balance: inGameBalanceNumber,
-          symbol: "BTC",
-        },
-        ETH: {
-          balance: inGameBalanceNumber,
-          symbol: "ETH",
-        },
-      };
+        const request: RefreshBalanceRequest = {
+          wallet_address: walletAddress,
+        };
 
-      setBalances(transformedBalances);
-      console.log("Balance state updated from refresh:", transformedBalances);
-      
-      return refreshResponse;
-    } catch (err) {
-      const errorMessage =
-        err instanceof Error ? err.message : "Failed to refresh balance";
-      setError(errorMessage);
-      console.error("Error refreshing balance:", err);
-      throw err;
-    } finally {
-      setLoading(false);
-    }
-  }, [setBalances, setLoading, setError]);
+        const refreshResponse = await balancesService.refreshBalance(request);
+        console.log("Refresh balance response:", refreshResponse);
+
+        updateBalancesFromWallet({
+          account_balance: refreshResponse.account_balance,
+          in_game_balance: refreshResponse.in_game_balance,
+          user_id: refreshResponse.user_id,
+          game_address: refreshResponse.game_address,
+        });
+
+        return refreshResponse;
+      } catch (err) {
+        const errorMessage =
+          err instanceof Error ? err.message : "Failed to refresh balance";
+        setError(errorMessage);
+        console.error("Error refreshing balance:", err);
+        throw err;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [setLoading, setError, updateBalancesFromWallet]
+  );
 
   return {
     fetchBalances,

@@ -20,7 +20,7 @@ export const Apex = () => {
   // UI state
   const [activeType, setActiveType] = useState<GameOption>(GameOption.Blinder);
   const [betAmount, setBetAmount] = useState(0.1);
-  const [selectedToken, setSelectedToken] = useState<"ETH" | "BTC">("BTC");
+  const selectedToken: "ETH" = "ETH";
 
   // Audio refs
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -65,9 +65,6 @@ export const Apex = () => {
     setBetAmount(amount);
   };
 
-  const handleTokenChange = (token: "ETH" | "BTC") => {
-    setSelectedToken(token);
-  };
 
   const handleStartGame = async () => {
     if (betAmount <= 0 || isNaN(betAmount)) {
@@ -76,8 +73,8 @@ export const Apex = () => {
     }
 
     try {
-      // Convert amount to API format (8 decimals)
-      const apiAmount = toApiAmount(betAmount, 8);
+      // Convert amount to API format (18 decimals for ETH)
+      const apiAmount = toApiAmount(betAmount, 18);
       console.log(
         "Starting game with betAmount:",
         betAmount,
@@ -92,8 +89,8 @@ export const Apex = () => {
       }
 
       // Start game via API (balance managed by backend)
-      const chain = selectedToken === "BTC" ? "bitcoin" : "ethereum";
-      await startGame(apiAmount, activeType, chain);
+      // Only Ethereum is supported for now
+      await startGame(apiAmount, activeType, "ethereum");
     } catch (err) {
       console.error("Failed to start game:", err);
     }
@@ -271,24 +268,9 @@ export const Apex = () => {
               Token
             </label>
             <div className="flex items-center justify-between gap-2 bg-primary/20 p-1 rounded-lg">
-              <button
-                className={`px-3 py-2 rounded-lg w-full cursor-pointer transition-colors text-sm ${
-                  selectedToken === "BTC" ? "bg-primary" : "hover:bg-white/10"
-                }`}
-                onClick={() => handleTokenChange("BTC")}
-                disabled={gameState.isPlaying && !gameState.gameOver}
-              >
-                BTC
-              </button>
-              <button
-                className={`px-3 py-2 rounded-lg w-full cursor-pointer transition-colors text-sm ${
-                  selectedToken === "ETH" ? "bg-primary" : "hover:bg-white/10"
-                }`}
-                onClick={() => handleTokenChange("ETH")}
-                disabled={gameState.isPlaying && !gameState.gameOver}
-              >
+              <span className="px-3 py-2 rounded-lg w-full text-center text-sm bg-primary">
                 ETH
-              </button>
+              </span>
             </div>
           </div>
 
@@ -346,10 +328,7 @@ export const Apex = () => {
                 />
               </div>
               <img
-                src={
-                  selectedToken === "BTC"
-                    ? "https://garden.imgix.net/token-images/bitcoin.svg"
-                    : "https://garden.imgix.net/token-images/ethereum.svg"
+                src={"https://garden.imgix.net/token-images/ethereum.svg"
                 }
                 alt={selectedToken}
                 className="w-6 h-6"
