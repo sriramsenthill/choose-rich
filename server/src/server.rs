@@ -1,5 +1,6 @@
 use moka::future::Cache;
 use std::{sync::Arc, time::Duration};
+use std::env;
 
 use crate::store::Store;
 
@@ -38,7 +39,7 @@ impl AppState {
 
         let pool = sqlx::postgres::PgPoolOptions::new()
             .max_connections(200)
-            .connect(pg_default)
+            .connect(&pg_default.as_str())
             .await
             .unwrap();
         Self {

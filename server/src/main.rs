@@ -8,6 +8,7 @@ use crate::{
 use axum::{Router, routing::get};
 use moka::future::Cache;
 use std::sync::Arc;
+use std::env;
 mod apex;
 mod auth;
 mod deposit_monitor;
@@ -33,7 +34,7 @@ async fn main() {
 
     let pool = sqlx::postgres::PgPoolOptions::new()
         .max_connections(200)
-        .connect(pg_default)
+        .connect(pg_default.as_str())
         .await
         .expect(
             "Failed to connect to database. Please ensure PostgreSQL is running on localhost:5432",
