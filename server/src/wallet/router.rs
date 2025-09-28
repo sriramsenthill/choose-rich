@@ -468,7 +468,7 @@ async fn start_mines_game(
     let _updated_user = state.store.adjust_in_game_balance(&user.user_id, &(-bet_amount.clone())).await
         .map_err(|e| garden::api::internal_error(&format!("Failed to deduct in-game balance: {}", e)))?;
 
-    let session = GameSession::new(payload.amount, payload.blocks, payload.mines, user.user_id.clone())
+    let session = GameSession::new(payload.amount, payload.blocks, payload.mines, user.user_id.clone()).await
         .map_err(|e| garden::api::bad_request(&e.to_string()))?;
 
     // Record game start transaction

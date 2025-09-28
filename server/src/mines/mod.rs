@@ -8,6 +8,57 @@ use std::{
 };
 use uuid::Uuid;
 
+const RANDOM_SERVER_URL: &str = "http://localhost:3000";
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct RandomNumberResponse {
+    success: bool,
+    #[serde(rename = "randomNumber")]
+    random_number: u32,
+}
+
+// Function to get random number from random-verifiable-server
+// Falls back to rand if server is unavailable
+async fn get_random_number_with_fallback(min: u32, max: u32) -> u32 {
+    match get_random_number_from_server().await {
+        Ok(num) => {
+            // Scale the 0-9 number to our desired range
+            let range = max - min + 1;
+            min + (num % range)
+        }
+        Err(_) => {
+            // Fallback to local rand if server is unavailable
+            let mut rng = rand::thread_rng();
+            rng.gen_range(min..=max)
+        }
+    }
+}
+
+// Internal function to call the random server
+async fn get_random_number_from_server() -> eyre::Result<u32> {
+    let client = reqwest::Client::new();
+    let response = client
+        .get(&format!("{}/random", RANDOM_SERVER_URL))
+        .send()
+        .await
+        .map_err(|e| eyre::eyre!("Failed to request random number: {}", e))?;
+    
+    if !response.status().is_success() {
+        return Err(eyre::eyre!("Random server returned error: {}", response.status()));
+    }
+    
+    let random_response: RandomNumberResponse = response
+        .json()
+        .await
+        .map_err(|e| eyre::eyre!("Failed to parse random number response: {}", e))?;
+    
+    if !random_response.success {
+        return Err(eyre::eyre!("Random server indicated failure"));
+    }
+    
+    Ok(random_response.random_number)
+}
+
 const SESSION_TTL: Duration = Duration::from_secs(30 * 60);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -89,15 +140,17 @@ pub enum SessionStatus {
 }
 
 impl GameSession {
-    pub fn new(src: f64, blocks: u32, mines: u32, user_id: String) -> eyre::Result<Self> {
+    pub async fn new(src: f64, blocks: u32, mines: u32, user_id: String) -> eyre::Result<Self> {
         if blocks.isqrt() * blocks.isqrt() != blocks {
             return Err(eyre::eyre!("Invalid Blocks"));
         }
 
         let mut mine_positions = HashSet::with_capacity(mines as usize);
-        let mut rng = rand::thread_rng();
+        
+        // Generate mine positions using random server with fallback to rand
         while mine_positions.len() < mines as usize {
-            mine_positions.insert(rng.gen_range(1..=blocks));
+            let position = get_random_number_with_fallback(1, blocks).await;
+            mine_positions.insert(position);
         }
 
         Ok(GameSession {

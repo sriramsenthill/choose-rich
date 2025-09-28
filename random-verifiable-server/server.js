@@ -4,12 +4,14 @@ const { createWalletClient, getContract, http, publicActions, parseEventLogs } =
 const { arbitrumSepolia } = require('viem/chains');
 const { privateKeyToAccount } = require('viem/accounts');
 const { IGenerateNumberAbi } = require('./contract-abi.js');
+const { IBugsNumberGeneratorAbi } = require('./bugs-number-generator-abi.js');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Contract configuration
 const CONTRACT_ADDRESS = "0x6C6a7a837a84c0946F4FE12f83C2253812341d72"; // Your deployed contract
+const BUGS_CONTRACT_ADDRESS = "0x7595e0AA952925A4D2afc3fc0DFf7dB6CeFf4D63"; // Your deployed BugsNumberGenerator contract
 const PRIVATE_KEY = "0x9c38fe9f16124f5f09cb7c877009b52cf439ffa755996bea145e242abab981a8";
 const RPC_URL = "https://sepolia-rollup.arbitrum.io/rpc";
 
@@ -20,10 +22,16 @@ const client = createWalletClient({
     transport: http(RPC_URL),
 }).extend(publicActions);
 
-// Initialize contract
+// Initialize contracts
 const generateNumberContract = getContract({
     address: CONTRACT_ADDRESS,
     abi: IGenerateNumberAbi,
+    client,
+});
+
+const bugsNumberGeneratorContract = getContract({
+    address: BUGS_CONTRACT_ADDRESS,
+    abi: IBugsNumberGeneratorAbi,
     client,
 });
 
@@ -95,6 +103,89 @@ async function generateRandomNumber() {
     }
 }
 
+// Calculate win chance using BugsNumberGenerator contract
+async function calculateWinChance(totalBlocks, numbersChosen, totalDefective) {
+    try {
+        console.log("🎯 Requesting win chance calculation from BugsNumberGenerator contract...");
+        console.log(`Parameters: Total Blocks: ${totalBlocks}, Numbers Chosen: ${numbersChosen}, Total Defective: ${totalDefective}`);
+        
+        // Get the fee required
+        const winChanceFee = await bugsNumberGeneratorContract.read.getWinChanceFee();
+        console.log(`Fee required: ${winChanceFee} wei`);
+        
+        // Calculate expected probability
+        const expectedProbability = await bugsNumberGeneratorContract.read.calculateWinProbability([
+            BigInt(totalBlocks),
+            BigInt(numbersChosen),
+            BigInt(totalDefective)
+        ]);
+        console.log(`Expected Win Probability: ${Number(expectedProbability) / 100}% (${expectedProbability} basis points)`);
+        
+        // Request win chance calculation
+        const txHash = await bugsNumberGeneratorContract.write.requestWinChance(
+            [BigInt(totalBlocks), BigInt(numbersChosen), BigInt(totalDefective)],
+            { value: winChanceFee }
+        );
+        
+        console.log(`Transaction Hash: ${txHash}`);
+        
+        // Wait for transaction receipt
+        const receipt = await client.waitForTransactionReceipt({
+            hash: txHash,
+        });
+        
+        // Parse the WinChanceRequest event to get sequence number
+        const requestLogs = parseEventLogs({
+            abi: IBugsNumberGeneratorAbi,
+            eventName: "WinChanceRequest",
+            logs: receipt.logs,
+        });
+        
+        const sequenceNumber = requestLogs[0].args.sequenceNumber;
+        console.log(`Sequence Number: ${sequenceNumber}`);
+        
+        // Wait for the WinResult event
+        console.log("⏳ Waiting for win result...");
+        const result = await new Promise((resolve, reject) => {
+            const unwatch = bugsNumberGeneratorContract.watchEvent.WinResult({
+                fromBlock: receipt.blockNumber - 1n,
+                onLogs: (logs) => {
+                    for (const log of logs) {
+                        if (log.args.sequenceNumber === sequenceNumber) {
+                            unwatch();
+                            resolve({
+                                didWin: log.args.didWin || false,
+                                winProbability: log.args.winProbability || 0n
+                            });
+                        }
+                    }
+                },
+            });
+            
+            // Timeout after 60 seconds
+            setTimeout(() => {
+                unwatch();
+                reject(new Error('Timeout waiting for win result'));
+            }, 60000);
+        });
+        
+        console.log(`🎯 Win Result: ${result.didWin ? "WON" : "LOST"}`);
+        console.log(`Win Probability: ${Number(result.winProbability) / 100}% (${result.winProbability} basis points)`);
+        
+        return {
+            didWin: result.didWin,
+            winProbability: Number(result.winProbability),
+            expectedProbability: Number(expectedProbability),
+            totalBlocks,
+            numbersChosen,
+            totalDefective
+        };
+    } catch (error) {
+        console.error("Error calculating win chance:", error);
+        throw error;
+    }
+}
+
 // Routes
 app.get('/', (req, res) => {
     res.json({
@@ -106,7 +197,9 @@ app.get('/', (req, res) => {
         endpoints: {
             'GET /random': 'Generate a truly random number between 0-9 using Pyth Entropy',
             'GET /random/:count': 'Generate multiple truly random numbers (1-10)',
-            'GET /fee': 'Get the current fee required for random number generation'
+            'GET /fee': 'Get the current fee required for random number generation',
+            'GET /win-chance': 'Calculate win chance with query parameters (totalBlocks, numbersChosen, totalDefective)',
+            'GET /bugs-fee': 'Get the current fee required for win chance calculation'
         }
     });
 });
@@ -186,6 +279,89 @@ app.get('/random/:count', async (req, res) => {
     }
 });
 
+// Get BugsNumberGenerator fee endpoint
+app.get('/bugs-fee', async (req, res) => {
+    try {
+        const fee = await bugsNumberGeneratorContract.read.getWinChanceFee();
+        res.json({
+            success: true,
+            fee: fee.toString(),
+            feeEth: (Number(fee) / 1e18).toString(),
+            contract: BUGS_CONTRACT_ADDRESS,
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: 'Failed to get BugsNumberGenerator fee information',
+            details: error.message
+        });
+    }
+});
+
+// Win chance calculation endpoint
+app.get('/win-chance', async (req, res) => {
+    const { totalBlocks, numbersChosen, totalDefective } = req.query;
+    
+    // Validate parameters
+    if (!totalBlocks || !numbersChosen || !totalDefective) {
+        return res.status(400).json({
+            success: false,
+            error: 'Missing required parameters: totalBlocks, numbersChosen, totalDefective',
+            example: '/win-chance?totalBlocks=17&numbersChosen=10&totalDefective=3'
+        });
+    }
+    
+    const totalBlocksNum = parseInt(totalBlocks);
+    const numbersChosenNum = parseInt(numbersChosen);
+    const totalDefectiveNum = parseInt(totalDefective);
+    
+    if (isNaN(totalBlocksNum) || isNaN(numbersChosenNum) || isNaN(totalDefectiveNum)) {
+        return res.status(400).json({
+            success: false,
+            error: 'All parameters must be valid numbers'
+        });
+    }
+    
+    if (totalBlocksNum <= 0 || numbersChosenNum <= 0 || totalDefectiveNum <= 0) {
+        return res.status(400).json({
+            success: false,
+            error: 'All parameters must be positive numbers'
+        });
+    }
+    
+    if (numbersChosenNum > totalBlocksNum || totalDefectiveNum > totalBlocksNum) {
+        return res.status(400).json({
+            success: false,
+            error: 'numbersChosen and totalDefective cannot be greater than totalBlocks'
+        });
+    }
+    
+    try {
+        const result = await calculateWinChance(totalBlocksNum, numbersChosenNum, totalDefectiveNum);
+        res.json({
+            success: true,
+            didWin: result.didWin,
+            winProbability: result.winProbability,
+            expectedProbability: result.expectedProbability,
+            parameters: {
+                totalBlocks: result.totalBlocks,
+                numbersChosen: result.numbersChosen,
+                totalDefective: result.totalDefective
+            },
+            source: 'BugsNumberGenerator Contract',
+            contract: BUGS_CONTRACT_ADDRESS,
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: 'Failed to calculate win chance',
+            details: error.message
+        });
+    }
+});
+
 // Health check endpoint
 app.get('/health', (req, res) => {
     res.json({
@@ -219,10 +395,13 @@ app.listen(PORT, () => {
     console.log(`   GET  http://localhost:${PORT}/random`);
     console.log(`   GET  http://localhost:${PORT}/random/3`);
     console.log(`   GET  http://localhost:${PORT}/fee`);
+    console.log(`   GET  http://localhost:${PORT}/win-chance?totalBlocks=17&numbersChosen=10&totalDefective=3`);
+    console.log(`   GET  http://localhost:${PORT}/bugs-fee`);
     console.log(`   GET  http://localhost:${PORT}/health`);
-    console.log(`\n🔗 Contract: ${CONTRACT_ADDRESS}`);
+    console.log(`\n🔗 GenerateNumber Contract: ${CONTRACT_ADDRESS}`);
+    console.log(`🎯 BugsNumberGenerator Contract: ${BUGS_CONTRACT_ADDRESS}`);
     console.log(`⛓️  Chain: Arbitrum Sepolia`);
-    console.log(`\n⚠️  Note: Each random number request costs gas fees!`);
+    console.log(`\n⚠️  Note: Each request costs gas fees!`);
 });
 
 module.exports = app;
